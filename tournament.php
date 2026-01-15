@@ -4,6 +4,54 @@
  * Подключается в index.php
  */
 
+require_once 'battle_phrases.php';
+
+$zonesLabel = [1 => 'Голова', 2 => 'Корпус', 3 => 'Живот', 4 => 'Пах', 5 => 'Ноги'];
+$zonesAccusative = [1 => 'Голову', 2 => 'Корпус', 3 => 'Живот', 4 => 'Пах', 5 => 'Ноги'];
+
+function formatZoneList($zones, $names) {
+    $labels = [];
+    foreach ($zones as $zone) {
+        if (isset($names[$zone])) {
+            $labels[] = $names[$zone];
+        }
+    }
+    $count = count($labels);
+    if ($count === 0) return 'ничего';
+    if ($count === 1) return $labels[0];
+    if ($count === 2) return $labels[0] . ' и ' . $labels[1];
+    return implode(', ', array_slice($labels, 0, -1)) . ' и ' . $labels[$count - 1];
+}
+
+function normalizeDefenseZones($input, $zoneCount = 5, $required = 2) {
+    $zones = [];
+    if (is_array($input)) {
+        foreach ($input as $zone) {
+            $zone = (int)$zone;
+            if ($zone >= 1 && $zone <= $zoneCount) {
+                $zones[] = $zone;
+            }
+        }
+    }
+    $zones = array_values(array_unique($zones));
+    if (count($zones) > $required) {
+        $zones = array_slice($zones, 0, $required);
+    }
+    while (count($zones) < $required) {
+        $candidate = rand(1, $zoneCount);
+        if (!in_array($candidate, $zones, true)) {
+            $zones[] = $candidate;
+        }
+    }
+    return $zones;
+}
+
+function calculateSelfDamage($attacker) {
+    $min = max(1, (int)floor($attacker['damage_min'] * 0.4));
+    $max = max($min, (int)floor($attacker['damage_max'] * 0.6));
+    return rand($min, $max);
+}
+
 function getTournamentHitChance($attacker, $defender) {
     $chance = (int)$attacker['hit_chance'] - (int)$defender['dodge_chance'];
     return max(5, min(95, $chance));
@@ -128,10 +176,16 @@ if (isset($_POST['process_tournament']) && $t['active']) {
         }
     }
 
-    $playerAtkZone = $_POST['attack_zone'] ?? rand(1,3);
-    $playerDefZone = $_POST['def_zone'] ?? rand(1,3);
+    if ($isTimeout) {
+        $playerAtkZone = 0;
+        $playerDefZones = [];
+    } else {
+        $playerAtkZone = $_POST['attack_zone'] ?? rand(1, 5);
+        $playerAtkZone = max(1, min(5, (int)$playerAtkZone));
+        $playerDefZones = normalizeDefenseZones($_POST['def_zones'] ?? [], 5, 2);
+    }
 
-    $roundLog = "<div class='log-turn-title'>Раунд {$t['turn']}</div>";
+    $roundLog = "<div class='log-entry-wrapper'><div class='log-turn-title'>Раунд {$t['turn']}</div>";
 
     // 1. АТАКА КОМАНДЫ А (Ваши)
     foreach ($t['teamA'] as &$fighter) {
@@ -156,19 +210,57 @@ if (isset($_POST['process_tournament']) && $t['active']) {
         }
 
         if ($target) {
-            $color = $fighter['is_player'] ? 'green' : '#555';
-            $hitChance = getTournamentHitChance($fighter, $target);
-            if (rand(1, 100) > $hitChance) {
-                $roundLog .= "<div style='color:$color'>{$fighter['name']} -> {$target['name']} (промах)</div>";
+            $attackZone = $fighter['is_player'] ? $playerAtkZone : rand(1, 5);
+            if ($attackZone < 1) {
+                $roundLog .= "<div class='log-line' style='color:#7f8c8d'>⌛ {$fighter['name']} пропустил ход.</div>";
+                continue;
+            }
+            $defZones = normalizeDefenseZones([], 5, 2);
+            $context = [
+                'attacker' => $fighter['is_player'] ? 'Вы' : $fighter['name'],
+                'defender' => $target['name'],
+                'zone' => $zonesAccusative[$attackZone],
+                'defZones' => formatZoneList($defZones, $zonesAccusative)
+            ];
+
+            if (in_array($attackZone, $defZones, true)) {
+                $roundLog .= "<div class='log-line'>" . getBattlePhrase('defense', 'block', $context) . "</div>";
             } else {
-                $dmg = calculateTournamentDamage($fighter, $target);
-                $critChance = getTournamentCritChance($fighter, $target);
-                $isCrit = (rand(1, 100) <= $critChance);
-                if ($isCrit) $dmg = (int)floor($dmg * 1.5);
-                $target['hp'] -= $dmg;
-                if ($target['hp'] <= 0) { $target['hp'] = 0; $target['alive'] = false; }
-                $critLabel = $isCrit ? " <span style='color:#f39c12'>КРИТ</span>" : '';
-                $roundLog .= "<div style='color:$color'>{$fighter['name']} -> {$target['name']} (-$dmg)$critLabel</div>";
+                if (rand(1, 100) <= 4) {
+                    $selfDmg = calculateSelfDamage($fighter);
+                    $fighter['hp'] = max(0, $fighter['hp'] - $selfDmg);
+                    if ($fighter['hp'] <= 0) { $fighter['hp'] = 0; $fighter['alive'] = false; }
+                    $context['selfDamage'] = "<span class='log-dmg'>-$selfDmg</span>";
+                    $roundLog .= "<div class='log-line'>" . getBattlePhrase('attack', 'self', $context) . "</div>";
+                } else {
+                    $hitChance = getTournamentHitChance($fighter, $target);
+                    if (rand(1, 100) > $hitChance) {
+                        $roundLog .= "<div class='log-line'>" . getBattlePhrase('defense', 'dodge', $context) . "</div>";
+                    } else {
+                        $defRoll = rand(1, 100);
+                        $defType = $defRoll <= 12 ? 'panic' : ($defRoll <= 32 ? 'dance' : 'fail');
+                        $roundLog .= "<div class='log-line'>" . getBattlePhrase('defense', $defType, $context) . "</div>";
+
+                        $dmg = calculateTournamentDamage($fighter, $target);
+                        $glance = rand(1, 100) <= 12;
+                        if ($glance) {
+                            $dmg = max(1, (int)floor($dmg * 0.6));
+                        }
+                        $critChance = getTournamentCritChance($fighter, $target);
+                        $isCrit = (!$glance && rand(1, 100) <= $critChance);
+                        if ($isCrit) {
+                            $dmg = (int)floor($dmg * 1.5);
+                            $context['damage'] = "<span class='log-dmg'>-$dmg</span>";
+                            $roundLog .= "<div class='log-line'>" . getBattlePhrase('attack', 'crit', $context) . "</div>";
+                        } else {
+                            $context['damage'] = "<span class='log-dmg'>-$dmg</span>";
+                            $roundLog .= "<div class='log-line'>" . getBattlePhrase('attack', $glance ? 'glance' : 'hit', $context) . "</div>";
+                        }
+
+                        $target['hp'] -= $dmg;
+                        if ($target['hp'] <= 0) { $target['hp'] = 0; $target['alive'] = false; }
+                    }
+                }
             }
         }
     }
@@ -182,19 +274,53 @@ if (isset($_POST['process_tournament']) && $t['active']) {
         
         if (!empty($liveEnemies)) {
             $target = &$t['teamA'][$liveEnemies[array_rand($liveEnemies)]];
-            $color = $target['is_player'] ? 'red' : 'brown';
-            $hitChance = getTournamentHitChance($fighter, $target);
-            if (rand(1, 100) > $hitChance) {
-                $roundLog .= "<div style='color:$color'>{$fighter['name']} -> {$target['name']} (промах)</div>";
+            $attackZone = rand(1, 5);
+            $defZones = $target['is_player'] ? $playerDefZones : normalizeDefenseZones([], 5, 2);
+            $context = [
+                'attacker' => $fighter['name'],
+                'defender' => $target['is_player'] ? $currentUser['username'] : $target['name'],
+                'zone' => $zonesAccusative[$attackZone],
+                'defZones' => formatZoneList($defZones, $zonesAccusative)
+            ];
+
+            if (!empty($defZones) && in_array($attackZone, $defZones, true)) {
+                $roundLog .= "<div class='log-line'>" . getBattlePhrase('defense', 'block', $context) . "</div>";
             } else {
-                $dmg = calculateTournamentDamage($fighter, $target);
-                $critChance = getTournamentCritChance($fighter, $target);
-                $isCrit = (rand(1, 100) <= $critChance);
-                if ($isCrit) $dmg = (int)floor($dmg * 1.5);
-                $target['hp'] -= $dmg;
-                if ($target['hp'] <= 0) { $target['hp'] = 0; $target['alive'] = false; }
-                $critLabel = $isCrit ? " <span style='color:#f39c12'>КРИТ</span>" : '';
-                $roundLog .= "<div style='color:$color'>{$fighter['name']} -> {$target['name']} (-$dmg)$critLabel</div>";
+                if (rand(1, 100) <= 4) {
+                    $selfDmg = calculateSelfDamage($fighter);
+                    $fighter['hp'] = max(0, $fighter['hp'] - $selfDmg);
+                    if ($fighter['hp'] <= 0) { $fighter['hp'] = 0; $fighter['alive'] = false; }
+                    $context['selfDamage'] = "<span class='log-dmg'>-$selfDmg</span>";
+                    $roundLog .= "<div class='log-line'>" . getBattlePhrase('attack', 'self', $context) . "</div>";
+                } else {
+                    $hitChance = getTournamentHitChance($fighter, $target);
+                    if (rand(1, 100) > $hitChance) {
+                        $roundLog .= "<div class='log-line'>" . getBattlePhrase('defense', 'dodge', $context) . "</div>";
+                    } else {
+                        $defRoll = rand(1, 100);
+                        $defType = $defRoll <= 12 ? 'panic' : ($defRoll <= 32 ? 'dance' : 'fail');
+                        $roundLog .= "<div class='log-line'>" . getBattlePhrase('defense', $defType, $context) . "</div>";
+
+                        $dmg = calculateTournamentDamage($fighter, $target);
+                        $glance = rand(1, 100) <= 12;
+                        if ($glance) {
+                            $dmg = max(1, (int)floor($dmg * 0.6));
+                        }
+                        $critChance = getTournamentCritChance($fighter, $target);
+                        $isCrit = (!$glance && rand(1, 100) <= $critChance);
+                        if ($isCrit) {
+                            $dmg = (int)floor($dmg * 1.5);
+                            $context['damage'] = "<span class='log-dmg'>-$dmg</span>";
+                            $roundLog .= "<div class='log-line'>" . getBattlePhrase('attack', 'crit', $context) . "</div>";
+                        } else {
+                            $context['damage'] = "<span class='log-dmg'>-$dmg</span>";
+                            $roundLog .= "<div class='log-line'>" . getBattlePhrase('attack', $glance ? 'glance' : 'hit', $context) . "</div>";
+                        }
+
+                        $target['hp'] -= $dmg;
+                        if ($target['hp'] <= 0) { $target['hp'] = 0; $target['alive'] = false; }
+                    }
+                }
             }
         }
     }
@@ -205,17 +331,19 @@ if (isset($_POST['process_tournament']) && $t['active']) {
 
     if ($aliveA == 0 && $aliveB == 0) {
         $t['active'] = false;
-        $roundLog .= "<h3>⚖️ НИЧЬЯ!</h3>";
+        $roundLog .= "<div class='log-line' style='color:#f1c40f; font-weight:bold;'>⚖️ НИЧЬЯ!</div>";
         $conn->query("UPDATE users SET draws = draws + 1 WHERE id = {$currentUser['id']}");
     } elseif ($aliveA == 0) {
         $t['active'] = false;
-        $roundLog .= "<h3>🔴 ПОРАЖЕНИЕ!</h3>";
+        $roundLog .= "<div class='log-line' style='color:#e74c3c; font-weight:bold;'>🔴 ПОРАЖЕНИЕ!</div>";
         $conn->query("UPDATE users SET losses = losses + 1 WHERE id = {$currentUser['id']}");
     } elseif ($aliveB == 0) {
         $t['active'] = false;
-        $roundLog .= "<h3>🔵 ПОБЕДА!</h3>";
+        $roundLog .= "<div class='log-line' style='color:#2ecc71; font-weight:bold;'>🔵 ПОБЕДА!</div>";
         $conn->query("UPDATE users SET wins = wins + 1 WHERE id = {$currentUser['id']}");
     }
+
+    $roundLog .= "</div>";
 
     array_unshift($t['log'], $roundLog);
     $t['turn']++;
@@ -252,7 +380,18 @@ $currentLogEntry = isset($t['log'][$currentPage-1]) ? $t['log'][$currentPage-1] 
             }
         }, 1000);
     }
-    window.onload = startTimer;
+    window.onload = function() {
+        startTimer();
+        const defBoxes = document.querySelectorAll('input[name="def_zones[]"]');
+        defBoxes.forEach((box) => {
+            box.addEventListener('change', (event) => {
+                const checked = Array.from(defBoxes).filter((item) => item.checked);
+                if (checked.length > 2) {
+                    event.target.checked = false;
+                }
+            });
+        });
+    };
 </script>
 
 <div class="battle-arena-wrapper">
@@ -302,11 +441,18 @@ $currentLogEntry = isset($t['log'][$currentPage-1]) ? $t['log'][$currentPage-1] 
                         <h4>Атака</h4>
                         <label class="zone-option"><input type="radio" name="attack_zone" value="1" checked> Голова</label>
                         <label class="zone-option"><input type="radio" name="attack_zone" value="2"> Корпус</label>
+                        <label class="zone-option"><input type="radio" name="attack_zone" value="3"> Живот</label>
+                        <label class="zone-option"><input type="radio" name="attack_zone" value="4"> Пах</label>
+                        <label class="zone-option"><input type="radio" name="attack_zone" value="5"> Ноги</label>
                     </div>
                     <div class="zone-column">
                         <h4>Блок</h4>
-                        <label class="zone-option"><input type="radio" name="def_zone" value="1" checked> Голова</label>
-                        <label class="zone-option"><input type="radio" name="def_zone" value="2"> Корпус</label>
+                        <div class="zone-note">Выберите 2 зоны</div>
+                        <label class="zone-option"><input type="checkbox" name="def_zones[]" value="1" checked> Голова</label>
+                        <label class="zone-option"><input type="checkbox" name="def_zones[]" value="2" checked> Корпус</label>
+                        <label class="zone-option"><input type="checkbox" name="def_zones[]" value="3"> Живот</label>
+                        <label class="zone-option"><input type="checkbox" name="def_zones[]" value="4"> Пах</label>
+                        <label class="zone-option"><input type="checkbox" name="def_zones[]" value="5"> Ноги</label>
                     </div>
                 </div>
                 <button type="submit" class="battle-btn">АТАКА</button>

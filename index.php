@@ -98,7 +98,7 @@ $page = $_GET['page'] ?? 'home';
             <?php elseif ($page == 'tournament'): ?>
                 <?php include 'tournament.php'; ?>
             <?php elseif ($page == 'shop'): ?>
-                <!-- Shop code... -->
+                <?php include 'shop.php'; ?>
             <?php endif; ?>
         </div>
         

@@ -80,14 +80,60 @@ function getBaseStatsFromUser($user) {
 
 function getEquippedItemBonuses($userId) {
     global $conn;
-    $bonus = ['str' => 0, 'def' => 0, 'hp' => 0];
-    $res = $conn->query("SELECT SUM(i.stat_str) as bonus_str, SUM(i.stat_def) as bonus_def, SUM(i.stat_hp) as bonus_hp FROM inventory inv JOIN items i ON inv.item_id = i.id WHERE inv.user_id = $userId AND inv.is_equipped = 1");
+    $bonus = [
+        'flat' => ['str' => 0, 'def' => 0, 'hp' => 0],
+        'base' => [
+            'health' => 0,
+            'strength' => 0,
+            'agility' => 0,
+            'stamina' => 0,
+            'perception' => 0,
+            'cunning' => 0,
+            'charisma' => 0
+        ]
+    ];
+    $res = $conn->query(
+        "SELECT
+            SUM(i.stat_str) as bonus_str,
+            SUM(i.stat_def) as bonus_def,
+            SUM(i.stat_hp) as bonus_hp,
+            SUM(i.stat_health) as bonus_health,
+            SUM(i.stat_strength) as bonus_strength,
+            SUM(i.stat_agility) as bonus_agility,
+            SUM(i.stat_stamina) as bonus_stamina,
+            SUM(i.stat_perception) as bonus_perception,
+            SUM(i.stat_cunning) as bonus_cunning,
+            SUM(i.stat_charisma) as bonus_charisma
+        FROM inventory inv
+        JOIN items i ON inv.item_id = i.id
+        LEFT JOIN shop_categories c ON i.category_id = c.id
+        WHERE inv.user_id = $userId
+            AND inv.is_equipped = 1
+            AND (c.status = 'active' OR c.id IS NULL)"
+    );
     if ($res && $row = $res->fetch_assoc()) {
-        $bonus['str'] = (int)($row['bonus_str'] ?? 0);
-        $bonus['def'] = (int)($row['bonus_def'] ?? 0);
-        $bonus['hp'] = (int)($row['bonus_hp'] ?? 0);
+        $bonus['flat']['str'] = (int)($row['bonus_str'] ?? 0);
+        $bonus['flat']['def'] = (int)($row['bonus_def'] ?? 0);
+        $bonus['flat']['hp'] = (int)($row['bonus_hp'] ?? 0);
+        $bonus['base']['health'] = (int)($row['bonus_health'] ?? 0);
+        $bonus['base']['strength'] = (int)($row['bonus_strength'] ?? 0);
+        $bonus['base']['agility'] = (int)($row['bonus_agility'] ?? 0);
+        $bonus['base']['stamina'] = (int)($row['bonus_stamina'] ?? 0);
+        $bonus['base']['perception'] = (int)($row['bonus_perception'] ?? 0);
+        $bonus['base']['cunning'] = (int)($row['bonus_cunning'] ?? 0);
+        $bonus['base']['charisma'] = (int)($row['bonus_charisma'] ?? 0);
     }
     return $bonus;
+}
+
+function applyBaseItemBonuses($baseStats, $bonusBase) {
+    foreach ($bonusBase as $key => $value) {
+        if (!isset($baseStats[$key])) {
+            continue;
+        }
+        $baseStats[$key] = max(1, $baseStats[$key] + (int)$value);
+    }
+    return $baseStats;
 }
 
 function calculateDerivedStats($baseStats, $bonusStats) {
@@ -130,7 +176,8 @@ function buildUserStatsSnapshot($userId) {
     $user = getUser($userId);
     $base = getBaseStatsFromUser($user);
     $bonus = getEquippedItemBonuses($userId);
-    $derived = calculateDerivedStats($base, $bonus);
+    $baseWithItems = applyBaseItemBonuses($base, $bonus['base']);
+    $derived = calculateDerivedStats($baseWithItems, $bonus['flat']);
     return ['user' => $user, 'base' => $base, 'bonus' => $bonus, 'derived' => $derived];
 }
 

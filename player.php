@@ -4,13 +4,19 @@
  * Подключается внутри index.php
  */
 
+require_once 'slots.php';
+
 // --- ЛОГИКА ИНВЕНТАРЯ ---
 if (isset($_GET['action']) && isset($_GET['inv_id'])) {
     $invId = (int)$_GET['inv_id'];
     if ($_GET['action'] == 'equip') {
-        $sqlSlot = "SELECT i.slot FROM inventory inv JOIN items i ON inv.item_id = i.id WHERE inv.id = $invId";
+        $sqlSlot = "SELECT i.slot, c.status as category_status FROM inventory inv JOIN items i ON inv.item_id = i.id LEFT JOIN shop_categories c ON i.category_id = c.id WHERE inv.id = $invId";
         $itemRow = $conn->query($sqlSlot)->fetch_assoc();
         if ($itemRow) {
+            if ($itemRow['category_status'] === 'hidden') {
+                $_SESSION['inv_message'] = 'Слот временно заблокирован. Экипировка недоступна.';
+                header("Location: index.php?page=player"); exit;
+            }
             $slot = $itemRow['slot'];
             $conn->query("UPDATE inventory inv JOIN items i ON inv.item_id = i.id SET inv.is_equipped = 0 WHERE inv.user_id = {$currentUser['id']} AND i.slot = '$slot'");
             $conn->query("UPDATE inventory SET is_equipped = 1 WHERE id = $invId AND user_id = {$currentUser['id']}");
@@ -32,6 +38,8 @@ if (isset($_POST['upgrade_stat'])) {
 
 $statUpgradeMessage = $_SESSION['stat_upgrade_message'] ?? null;
 $statUpgradeSuccess = $_SESSION['stat_upgrade_success'] ?? null;
+$invMessage = $_SESSION['inv_message'] ?? null;
+unset($_SESSION['inv_message']);
 unset($_SESSION['stat_upgrade_message'], $_SESSION['stat_upgrade_success']);
 
 if (empty($statDefinitions)) {
@@ -41,18 +49,42 @@ if (empty($baseStats)) {
     $baseStats = getBaseStatsFromUser($currentUser);
 }
 
-function renderSlot($userId, $slotName, $iconName, $title, $slotNumber) {
+function getSlotStatusMap() {
+    global $conn;
+    $map = [];
+    $res = $conn->query("SELECT slot_number, status FROM shop_categories");
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {
+            $map[(int)$row['slot_number']] = $row['status'];
+        }
+    }
+    return $map;
+}
+
+$slotDefinitions = getSlotDefinitions();
+$slotStatusMap = getSlotStatusMap();
+
+function renderSlot($userId, $slotName, $iconName, $title, $slotNumber, $isLocked = false) {
     global $conn;
     $res = $conn->query("SELECT i.*, inv.id as inv_id FROM inventory inv JOIN items i ON inv.item_id = i.id WHERE inv.user_id = $userId AND inv.is_equipped = 1 AND i.slot = '$slotName' LIMIT 1");
     $item = $res->fetch_assoc();
     $filledClass = $item ? 'filled' : '';
-    echo "<div class='inv-slot $filledClass' title='$title'>";
+    $lockedClass = $isLocked ? 'locked' : '';
+    $displayTitle = $isLocked ? $title . ' (заблокирован)' : $title;
+    echo "<div class='inv-slot $filledClass $lockedClass' title='$displayTitle'>";
     echo "<span class='slot-number'>$slotNumber</span>";
-    if ($item) {
-        echo "<i data-lucide='$iconName'></i>"; 
+    if ($isLocked) {
+        echo "<i data-lucide='lock'></i>";
+    } elseif ($item) {
+        if (!empty($item['image'])) {
+            $imgSrc = htmlspecialchars($item['image']);
+            echo "<img src='$imgSrc' alt='item' class='slot-item-img'>";
+        } else {
+            echo "<i data-lucide='$iconName'></i>";
+        }
         echo "<a href='?page=player&action=unequip&inv_id={$item['inv_id']}' class='action-btn'>x</a>";
     } else {
-        echo "<i data-lucide='$iconName'></i>"; 
+        echo "<i data-lucide='$iconName'></i>";
     }
     echo "</div>";
 }
@@ -61,28 +93,26 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber) {
 <!-- ИНТЕРФЕЙС ПРОФИЛЯ -->
 <div class="char-inventory-wrapper player-profile">
     <div class="profile-topbar">
-        <div class="profile-level-badge">
-            <div class="profile-level-number"><?= $currentUser['level'] ?></div>
-            <div class="profile-level-label">уровень</div>
-        </div>
-        <div class="profile-bars">
-            <div class="profile-bar">
-                <div class="profile-bar-title">Жизни</div>
-                <div class="profile-bar-track">
-                    <div class="profile-bar-fill" style="width: <?= min(100, ($currentUser['hp'] / max(1, $currentUser['total_max_hp'])) * 100) ?>%"></div>
-                </div>
-                <div class="profile-bar-value"><?= $currentUser['hp'] ?>/<?= $currentUser['total_max_hp'] ?></div>
+        <div class="profile-top-item profile-level">Уровень: <span><?= $currentUser['level'] ?></span></div>
+        <div class="profile-top-item profile-hp">
+            <span class="hp-label">Жизни:</span>
+            <div class="profile-bar-track">
+                <div class="profile-bar-fill" style="width: <?= min(100, ($currentUser['hp'] / max(1, $currentUser['total_max_hp'])) * 100) ?>%"></div>
             </div>
+            <span class="profile-bar-value"><?= $currentUser['hp'] ?>/<?= $currentUser['total_max_hp'] ?></span>
         </div>
-        <div class="profile-currency">
-            <div class="currency-chip">💰 <?= $currentUser['money'] ?></div>
-            <div class="currency-chip">⭐ <?= $currentUser['exp'] ?></div>
-        </div>
+        <div class="profile-top-item profile-currency">💰 <?= $currentUser['money'] ?></div>
+        <div class="profile-top-item profile-currency">⭐ <?= $currentUser['exp'] ?></div>
     </div>
 
     <?php if ($statUpgradeMessage): ?>
         <div class="stat-upgrade-message <?= $statUpgradeSuccess ? 'success' : 'error' ?>">
             <?= htmlspecialchars($statUpgradeMessage) ?>
+        </div>
+    <?php endif; ?>
+    <?php if ($invMessage): ?>
+        <div class="stat-upgrade-message error">
+            <?= htmlspecialchars($invMessage) ?>
         </div>
     <?php endif; ?>
 
@@ -122,26 +152,26 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber) {
             </div>
 
             <div class="doll-top-left">
-                <?php renderSlot($currentUser['id'], 'earrings', 'ear', 'Серьги', 1); ?>
+                <?php renderSlot($currentUser['id'], 'earrings', 'ear', 'Серьги', 1, (($slotStatusMap[1] ?? 'active') === 'hidden')); ?>
             </div>
             
             <div class="doll-top-center">
-                <?php renderSlot($currentUser['id'], 'necklace', 'gem', 'Ожерелье', 2); ?>
-                <?php renderSlot($currentUser['id'], 'helmet', 'crown', 'Шлем', 3); ?>
-                <?php renderSlot($currentUser['id'], 'amulet', 'sun', 'Амулет', 4); ?>
-                <div class="inv-slot" title="Доп. слот"><span class="slot-number">5</span><i data-lucide="sparkles"></i></div>
+                <?php renderSlot($currentUser['id'], 'necklace', 'gem', 'Ожерелье', 2, (($slotStatusMap[2] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'helmet', 'crown', 'Шлем', 3, (($slotStatusMap[3] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'amulet', 'sun', 'Амулет', 4, (($slotStatusMap[4] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'top_extra', 'sparkles', 'Доп. слот', 5, (($slotStatusMap[5] ?? 'active') === 'hidden')); ?>
             </div>
             
             <div class="doll-top-right">
-                <div class="inv-slot" title="Доп. слот"><span class="slot-number">6</span><i data-lucide="sparkles"></i></div>
+                <?php renderSlot($currentUser['id'], 'top_extra_right', 'sparkles', 'Доп. слот', 6, (($slotStatusMap[6] ?? 'active') === 'hidden')); ?>
             </div>
 
             <div class="doll-left-col">
-                <?php renderSlot($currentUser['id'], 'weapon', 'sword', 'Оружие', 7); ?>
-                <div class="inv-slot" title="Наручи"><span class="slot-number">8</span><i data-lucide="circle-dashed"></i></div>
-                <div class="inv-slot" title="Кольцо"><span class="slot-number">9</span><i data-lucide="circle-dot"></i></div>
-                <div class="inv-slot" title="Кольцо"><span class="slot-number">10</span><i data-lucide="circle-dot"></i></div>
-                <div class="inv-slot" title="Доп. слот лево"><span class="slot-number">11</span><i data-lucide="circle-dot"></i></div>
+                <?php renderSlot($currentUser['id'], 'weapon', 'sword', 'Оружие', 7, (($slotStatusMap[7] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'bracers', 'circle-dashed', 'Наручи', 8, (($slotStatusMap[8] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'ring_left_1', 'circle-dot', 'Кольцо', 9, (($slotStatusMap[9] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'ring_left_2', 'circle-dot', 'Кольцо', 10, (($slotStatusMap[10] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'left_extra', 'circle-dot', 'Доп. слот лево', 11, (($slotStatusMap[11] ?? 'active') === 'hidden')); ?>
             </div>
 
             <div class="char-avatar-box">
@@ -153,11 +183,11 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber) {
             </div>
 
             <div class="doll-right-col">
-                <?php renderSlot($currentUser['id'], 'armor', 'shirt', 'Броня', 12); ?>
-                <div class="inv-slot" title="Перчатки"><span class="slot-number">13</span><i data-lucide="hand"></i></div>
-                <div class="inv-slot" title="Плащ"><span class="slot-number">14</span><i data-lucide="wind"></i></div>
-                <div class="inv-slot" title="Кольцо"><span class="slot-number">15</span><i data-lucide="circle-dot"></i></div>
-                <div class="inv-slot" title="Доп. слот право"><span class="slot-number">16</span><i data-lucide="circle-dot"></i></div>
+                <?php renderSlot($currentUser['id'], 'armor', 'shirt', 'Броня', 12, (($slotStatusMap[12] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'gloves', 'hand', 'Перчатки', 13, (($slotStatusMap[13] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'cloak', 'wind', 'Плащ', 14, (($slotStatusMap[14] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'ring_right', 'circle-dot', 'Кольцо', 15, (($slotStatusMap[15] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'right_extra', 'circle-dot', 'Доп. слот право', 16, (($slotStatusMap[16] ?? 'active') === 'hidden')); ?>
             </div>
 
             <div class="doll-stats-col-right">
@@ -194,18 +224,18 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber) {
             </div>
 
             <div class="doll-btm-left">
-                <div class="inv-slot" title="Пояс"><span class="slot-number">17</span><i data-lucide="minus"></i></div>
+                <?php renderSlot($currentUser['id'], 'belt', 'minus', 'Пояс', 17, (($slotStatusMap[17] ?? 'active') === 'hidden')); ?>
             </div>
             
             <div class="doll-btm-center">
-                <div class="inv-slot" title="Поножи"><span class="slot-number">18</span><i data-lucide="columns-2"></i></div>
-                <?php renderSlot($currentUser['id'], 'boots', 'footprints', 'Сапоги', 19); ?>
-                <div class="inv-slot" title="Слот"><span class="slot-number">20</span><i data-lucide="sparkles"></i></div>
-                <div class="inv-slot" title="Слот"><span class="slot-number">21</span><i data-lucide="sparkles"></i></div>
+                <?php renderSlot($currentUser['id'], 'pants', 'columns-2', 'Поножи', 18, (($slotStatusMap[18] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'boots', 'footprints', 'Сапоги', 19, (($slotStatusMap[19] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'bottom_extra_1', 'sparkles', 'Слот', 20, (($slotStatusMap[20] ?? 'active') === 'hidden')); ?>
+                <?php renderSlot($currentUser['id'], 'bottom_extra_2', 'sparkles', 'Слот', 21, (($slotStatusMap[21] ?? 'active') === 'hidden')); ?>
             </div>
             
             <div class="doll-btm-right">
-                <div class="inv-slot" title="Слот"><span class="slot-number">22</span><i data-lucide="sparkles"></i></div>
+                <?php renderSlot($currentUser['id'], 'bottom_extra_right', 'sparkles', 'Слот', 22, (($slotStatusMap[22] ?? 'active') === 'hidden')); ?>
             </div>
         </div>
 
@@ -219,6 +249,10 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber) {
         <div class="backpack-title">🎒 Рюкзак</div>
         <div class="backpack-grid">
             <?php
+            $slotIconMap = [];
+            foreach ($slotDefinitions as $slotData) {
+                $slotIconMap[$slotData['key']] = $slotData['icon'];
+            }
             $sql = "SELECT inv.id as inv_id, i.* FROM inventory inv JOIN items i ON inv.item_id = i.id WHERE inv.user_id = {$currentUser['id']} AND inv.is_equipped = 0";
             $res = $conn->query($sql);
             if ($res->num_rows > 0):
@@ -226,12 +260,13 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber) {
             ?>
                 <a href="?page=player&action=equip&inv_id=<?= $item['inv_id'] ?>" class="backpack-slot" title="<?= $item['name'] ?>">
                     <?php 
-                    $ico = 'package';
-                    if($item['slot']=='weapon') $ico='sword';
-                    elseif($item['slot']=='armor') $ico='shirt';
-                    elseif($item['slot']=='helmet') $ico='crown';
-                    elseif($item['slot']=='boots') $ico='footprints';
-                    echo "<i data-lucide='$ico'></i>";
+                    if (!empty($item['image'])) {
+                        $imgSrc = htmlspecialchars($item['image']);
+                        echo "<img src='$imgSrc' alt='item' class='slot-item-img'>";
+                    } else {
+                        $ico = $slotIconMap[$item['slot']] ?? 'package';
+                        echo "<i data-lucide='$ico'></i>";
+                    }
                     ?>
                 </a>
             <?php endwhile; else: ?>
