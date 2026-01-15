@@ -12,27 +12,7 @@ $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
 if ($conn->connect_error) { die("Connection failed: " . $conn->connect_error); }
 $conn->set_charset("utf8");
 
-// --- FUNCTIONS ---
-function getUser($id) {
-    global $conn;
-    return $conn->query("SELECT * FROM users WHERE id = $id")->fetch_assoc();
-}
-
-function calculateStats($userId) {
-    global $conn;
-    $user = getUser($userId);
-    $totalStr = $user['strength'];
-    $totalDef = $user['defense'];
-    $totalHpMax = $user['max_hp']; 
-
-    $res = $conn->query("SELECT i.* FROM inventory inv JOIN items i ON inv.item_id = i.id WHERE inv.user_id = $userId AND inv.is_equipped = 1");
-    while($item = $res->fetch_assoc()) {
-        $totalStr += $item['stat_str'];
-        $totalDef += $item['stat_def'];
-        $totalHpMax += $item['stat_hp'];
-    }
-    return ['str' => $totalStr, 'def' => $totalDef, 'max_hp' => $totalHpMax];
-}
+require_once 'stats.php';
 
 // ... (Authentication logic remains the same) ...
 if (isset($_POST['login'])) {
@@ -48,12 +28,18 @@ if (isset($_POST['login'])) {
 if (isset($_GET['logout'])) { session_destroy(); header("Location: index.php"); exit; }
 
 $currentUser = null;
+$baseStats = [];
+$statDefinitions = [];
 if (isset($_SESSION['user_id'])) {
-    $currentUser = getUser($_SESSION['user_id']);
-    $stats = calculateStats($_SESSION['user_id']);
-    $currentUser['total_str'] = $stats['str'];
-    $currentUser['total_def'] = $stats['def'];
-    $currentUser['total_max_hp'] = $stats['max_hp'];
+    $statsSnapshot = buildUserStatsSnapshot($_SESSION['user_id']);
+    $currentUser = $statsSnapshot['user'];
+    $baseStats = $statsSnapshot['base'];
+    $statDefinitions = getStatDefinitions();
+    $currentUser = array_merge($currentUser, $statsSnapshot['derived']);
+    $currentUser['total_str'] = $statsSnapshot['derived']['total_str'];
+    $currentUser['total_def'] = $statsSnapshot['derived']['total_def'];
+    $currentUser['total_max_hp'] = $statsSnapshot['derived']['total_max_hp'];
+    syncUserDerivedStats($currentUser['id'], $statsSnapshot['derived'], (int)$currentUser['hp']);
 }
 
 $page = $_GET['page'] ?? 'home';

@@ -6,9 +6,26 @@
 
 $turnDuration = 15; // Время на ход в секундах
 
+function getEffectiveHitChance($attacker, $defender) {
+    $chance = (int)$attacker['hit_chance'] - (int)$defender['dodge_chance'];
+    return max(5, min(95, $chance));
+}
+
+function getEffectiveCritChance($attacker, $defender) {
+    $chance = (int)$attacker['crit_chance'] - (int)$defender['crit_resist'];
+    return max(0, min(60, $chance));
+}
+
+function calculateBattleDamage($attacker, $defender) {
+    $raw = rand((int)$attacker['damage_min'], (int)$attacker['damage_max']);
+    $mitigation = (int)floor((int)$defender['total_def'] * 0.6);
+    return max(1, $raw - $mitigation);
+}
+
 // Инициализация боя
 if (!isset($_SESSION['battle'])) {
-    $botMaxHp = 100;
+    $botLevel = max(1, (int)$currentUser['level']);
+    $botStats = buildBotCombatStats($botLevel, 'brutal');
     $_SESSION['battle'] = [
         'id' => uniqid(),
         'turn' => 1,
@@ -18,11 +35,19 @@ if (!isset($_SESSION['battle'])) {
         'turn_deadline' => time() + $turnDuration, 
         'enemy' => [
             'name' => 'Разбойник',
-            'level' => 1,
-            'hp' => $botMaxHp,
-            'max_hp' => $botMaxHp,
-            'str' => 10,
-            'def' => 5,
+            'level' => $botLevel,
+            'hp' => $botStats['total_max_hp'],
+            'max_hp' => $botStats['total_max_hp'],
+            'str' => $botStats['total_str'],
+            'def' => $botStats['total_def'],
+            'total_def' => $botStats['total_def'],
+            'damage_min' => $botStats['damage_min'],
+            'damage_max' => $botStats['damage_max'],
+            'hit_chance' => $botStats['hit_chance'],
+            'crit_chance' => $botStats['crit_chance'],
+            'crit_resist' => $botStats['crit_resist'],
+            'dodge_chance' => $botStats['dodge_chance'],
+            'gold_bonus' => $botStats['gold_bonus'],
             'avatar' => '' 
         ]
     ];
@@ -66,34 +91,63 @@ if (isset($_POST['process_turn']) && $battle['active']) {
         if ($playerAtk == $botDef) {
             $turnContent .= "<div class='log-line'>⚔️ Вы ударили в <b>{$zonesName[$playerAtk]}</b>, но <span class='log-block'>блок</span>.</div>";
         } else {
-            $dmg = max(1, ($currentUser['total_str'] * 2) - $enemy['def'] + rand(-2, 2));
-            if (rand(1, 100) <= 10) { $dmg = floor($dmg * 1.5); $turnContent .= "<div class='log-line'>⚔️ <span class='log-crit'>КРИТ!</span> Вы пробили <b>{$zonesName[$playerAtk]}</b> на <span class='log-dmg'>-$dmg</span>.</div>"; }
-            else { $turnContent .= "<div class='log-line'>⚔️ Вы ударили в <b>{$zonesName[$playerAtk]}</b> на <span class='log-dmg'>-$dmg</span>.</div>"; }
-            $enemy['hp'] -= $dmg;
+            $hitChance = getEffectiveHitChance($currentUser, $enemy);
+            if (rand(1, 100) > $hitChance) {
+                $turnContent .= "<div class='log-line'>⚔️ Вы целились в <b>{$zonesName[$playerAtk]}</b>, но <span class='log-miss'>промах</span>.</div>";
+            } else {
+                $dmg = calculateBattleDamage($currentUser, $enemy);
+                $critChance = getEffectiveCritChance($currentUser, $enemy);
+                if (rand(1, 100) <= $critChance) {
+                    $dmg = (int)floor($dmg * 1.5);
+                    $turnContent .= "<div class='log-line'>⚔️ <span class='log-crit'>КРИТ!</span> Вы пробили <b>{$zonesName[$playerAtk]}</b> на <span class='log-dmg'>-$dmg</span>.</div>";
+                } else {
+                    $turnContent .= "<div class='log-line'>⚔️ Вы ударили в <b>{$zonesName[$playerAtk]}</b> на <span class='log-dmg'>-$dmg</span>.</div>";
+                }
+                $enemy['hp'] -= $dmg;
+            }
         }
     }
 
     if ($botAtk == $playerDef && $playerDef > 0) {
         $turnContent .= "<div class='log-line'>🛡️ Враг ударил в <b>{$zonesName[$botAtk]}</b>, но <span class='log-block'>Вы поставили блок</span>.</div>";
     } else {
-        $botDmg = max(1, ($enemy['str'] * 2) - $currentUser['total_def'] + rand(-1, 1));
-        $currentUser['hp'] -= $botDmg;
-        $conn->query("UPDATE users SET hp = {$currentUser['hp']} WHERE id = {$currentUser['id']}");
-        $turnContent .= "<div class='log-line'>🩸 Враг ударил в <b>{$zonesName[$botAtk]}</b> на <span class='log-dmg'>-$botDmg</span>.</div>";
+        $hitChance = getEffectiveHitChance($enemy, $currentUser);
+        if (rand(1, 100) > $hitChance) {
+            $turnContent .= "<div class='log-line'>🩸 Враг бил в <b>{$zonesName[$botAtk]}</b>, но <span class='log-miss'>промахнулся</span>.</div>";
+        } else {
+            $botDmg = calculateBattleDamage($enemy, $currentUser);
+            $critChance = getEffectiveCritChance($enemy, $currentUser);
+            if (rand(1, 100) <= $critChance) {
+                $botDmg = (int)floor($botDmg * 1.5);
+                $turnContent .= "<div class='log-line'>🩸 <span class='log-crit'>КРИТ!</span> Враг пробил <b>{$zonesName[$botAtk]}</b> на <span class='log-dmg'>-$botDmg</span>.</div>";
+            } else {
+                $turnContent .= "<div class='log-line'>🩸 Враг ударил в <b>{$zonesName[$botAtk]}</b> на <span class='log-dmg'>-$botDmg</span>.</div>";
+            }
+            $currentUser['hp'] = max(0, $currentUser['hp'] - $botDmg);
+            $conn->query("UPDATE users SET hp = {$currentUser['hp']} WHERE id = {$currentUser['id']}");
+        }
     }
 
     $fullLogEntry = "<div class='log-entry-wrapper'><div class='log-turn-title'>Раунд {$battle['turn']}</div>$logHeader $turnContent";
 
     // Финал боя
-    if ($enemy['hp'] <= 0) {
+    if ($enemy['hp'] <= 0 && $currentUser['hp'] <= 0) {
+        $enemy['hp'] = 0;
+        $currentUser['hp'] = 0;
+        $battle['active'] = false;
+        $fullLogEntry .= "<div style='color:#f1c40f; font-weight:bold; margin-top:5px; font-size:16px;'>⚖️ НИЧЬЯ!</div></div>";
+        $conn->query("UPDATE users SET draws = draws + 1 WHERE id = {$currentUser['id']}");
+    } elseif ($enemy['hp'] <= 0) {
         $enemy['hp'] = 0;
         $battle['active'] = false;
+        $moneyGain = 5 + (int)floor(5 * ($currentUser['gold_bonus'] / 100));
         $fullLogEntry .= "<div style='color:green; font-weight:bold; margin-top:5px; font-size:16px;'>🏆 ПОБЕДА!</div></div>";
-        $conn->query("UPDATE users SET exp = exp + 10, money = money + 5 WHERE id = {$currentUser['id']}");
+        $conn->query("UPDATE users SET exp = exp + 10, money = money + $moneyGain, wins = wins + 1 WHERE id = {$currentUser['id']}");
     } elseif ($currentUser['hp'] <= 0) {
         $currentUser['hp'] = 0;
         $battle['active'] = false;
         $fullLogEntry .= "<div style='color:red; font-weight:bold; margin-top:5px; font-size:16px;'>☠️ ВЫ ПРОИГРАЛИ!</div></div>";
+        $conn->query("UPDATE users SET losses = losses + 1 WHERE id = {$currentUser['id']}");
     } else {
         $fullLogEntry .= "</div>";
     }
@@ -189,8 +243,8 @@ $currentLogEntry = isset($battle['log'][$logIndex]) ? $battle['log'][$logIndex] 
                 <div class="battle-hp-text"><?= $currentUser['hp'] ?> / <?= $currentUser['total_max_hp'] ?></div>
             </div>
             <div class="fighter-stats-mini">
-                <div>Сила: <?= $currentUser['total_str'] ?></div>
-                <div>Защита: <?= $currentUser['total_def'] ?></div>
+                <div>Урон: <?= $currentUser['damage_min'] ?>-<?= $currentUser['damage_max'] ?></div>
+                <div>Броня: <?= $currentUser['armor'] ?></div>
             </div>
         </div>
 
@@ -203,8 +257,8 @@ $currentLogEntry = isset($battle['log'][$logIndex]) ? $battle['log'][$logIndex] 
                 <div class="battle-hp-text"><?= $enemy['hp'] ?> / <?= $enemy['max_hp'] ?></div>
             </div>
             <div class="fighter-stats-mini">
-                <div>Сила: <?= $enemy['str'] ?></div>
-                <div>Защита: <?= $enemy['def'] ?></div>
+                <div>Урон: <?= $enemy['damage_min'] ?>-<?= $enemy['damage_max'] ?></div>
+                <div>Броня: <?= $enemy['def'] ?></div>
             </div>
         </div>
     </div>

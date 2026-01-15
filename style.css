@@ -351,3 +351,398 @@ ul { list-style: none; padding: 0; margin: 0; }
 
 .log-entry-wrapper { width: 100%; }
 .log-line { margin: 5px 0; }
+
+/* --- PLAYER PROFILE (ARCADE STYLE) --- */
+.player-profile {
+    background: linear-gradient(180deg, #1a9be5 0%, #0c6bbf 100%);
+    border-radius: 16px;
+    padding: 16px;
+    border: 3px solid #083a6d;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.45);
+    color: #f8fbff;
+}
+
+.profile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: space-between;
+    background: linear-gradient(90deg, #0d6fd4, #17b2ea);
+    border: 3px solid #052a4f;
+    padding: 10px 12px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.2);
+}
+
+.profile-level-badge {
+    background: #f1c40f;
+    color: #2b1a04;
+    border-radius: 10px;
+    border: 3px solid #7a4c00;
+    padding: 6px 10px;
+    text-align: center;
+    min-width: 60px;
+    box-shadow: inset 0 0 8px rgba(255,255,255,0.4);
+}
+
+.profile-level-number {
+    font-size: 18px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.profile-level-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.profile-bars {
+    flex: 1;
+}
+
+.profile-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.profile-bar-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: rgba(255,255,255,0.8);
+}
+
+.profile-bar-track {
+    width: 100%;
+    height: 10px;
+    background: #0a3661;
+    border: 2px solid #0c2b48;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.profile-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #42f57b, #0fd0ff);
+    box-shadow: inset 0 0 6px rgba(255,255,255,0.6);
+}
+
+.profile-bar-value {
+    font-size: 11px;
+    color: #e7f6ff;
+}
+
+.profile-currency {
+    display: flex;
+    gap: 8px;
+}
+
+.currency-chip {
+    background: #12385f;
+    border: 2px solid #0de6ff;
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-weight: bold;
+    font-size: 11px;
+    box-shadow: inset 0 0 6px rgba(13,230,255,0.3);
+}
+
+.profile-title {
+    margin: 14px auto 10px;
+    width: fit-content;
+    background: linear-gradient(180deg, #7cf57f, #29b34c);
+    color: #0a2d10;
+    border: 3px solid #1b6d2d;
+    padding: 6px 24px;
+    border-radius: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    box-shadow: 0 6px 0 #1b6d2d;
+}
+
+.player-profile .doll-container {
+    background: linear-gradient(180deg, #0f6cc4, #084f94);
+    border: 3px solid #052a4f;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.35);
+}
+
+.player-profile .doll-stats-col-left,
+.player-profile .doll-stats-col-right {
+    background: rgba(5, 33, 60, 0.85);
+    border: 2px solid #0de6ff;
+    color: #e7f5ff;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.4);
+}
+
+.stats-title {
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.3);
+    padding-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.stat-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 6px;
+    align-items: center;
+    padding: 3px 0;
+    font-size: 11px;
+    border-bottom: 1px dashed rgba(255,255,255,0.2);
+}
+
+.stat-row.compact {
+    grid-template-columns: 1fr auto;
+}
+
+.stat-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #d9f2ff;
+}
+
+.stat-label i,
+.stat-label svg {
+    width: 16px !important;
+    height: 16px !important;
+    color: #6cf6ff;
+}
+
+.stat-value {
+    font-weight: bold;
+    color: #fff;
+}
+
+.stat-plus-btn {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 2px solid #0de6ff;
+    background: #0b3560;
+    color: #f7fffe;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    box-shadow: inset 0 0 4px rgba(13,230,255,0.6);
+}
+
+.stat-plus-btn:hover {
+    background: #0de6ff;
+    color: #0b1d31;
+}
+
+.stats-divider {
+    margin: 8px 0 6px;
+    border-top: 1px solid rgba(255,255,255,0.25);
+}
+
+.player-profile .inv-slot {
+    background: linear-gradient(135deg, #2f4f75, #0c2f52);
+    border: 3px solid #0de6ff;
+    box-shadow: inset 0 0 6px rgba(0,0,0,0.6);
+}
+
+.player-profile .inv-slot.filled {
+    border-color: #f1c40f;
+    background: linear-gradient(135deg, #375a87, #112c4e);
+}
+
+.slot-number {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    font-size: 9px;
+    background: rgba(0,0,0,0.45);
+    color: #fff;
+    padding: 1px 4px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.2);
+    z-index: 3;
+}
+
+.player-profile .char-avatar-box {
+    background: linear-gradient(135deg, #2c4b7c 0%, #12284b 100%);
+    border: 3px solid #0de6ff;
+}
+
+.player-profile .char-info-overlay {
+    background: rgba(6, 23, 41, 0.85);
+    color: #cfeeff;
+    border-top: 2px solid #0de6ff;
+}
+
+.player-profile .inv-actions {
+    margin-top: 16px;
+}
+
+.player-profile .inv-action-btn {
+    background: linear-gradient(180deg, #0de6ff, #0a78c1);
+    color: #06172a;
+    border: 2px solid #073a64;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+.player-profile .backpack-area {
+    background: rgba(6, 28, 51, 0.9);
+    border: 2px solid #0de6ff;
+    color: #e7f6ff;
+}
+
+.backpack-title {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+
+.backpack-empty {
+    color: rgba(255,255,255,0.7);
+    font-size: 11px;
+    padding: 5px;
+}
+
+.player-profile .backpack-slot {
+    background: #0b2e53;
+    border: 2px solid #0de6ff;
+}
+
+.player-profile .backpack-slot:hover {
+    outline: 2px solid #f1c40f;
+}
+
+.stat-upgrade-message {
+    margin: 10px 0;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-weight: bold;
+    border: 2px solid transparent;
+}
+
+.stat-upgrade-message.success {
+    background: rgba(0, 200, 120, 0.2);
+    border-color: #2ecc71;
+    color: #e9fff3;
+}
+
+.stat-upgrade-message.error {
+    background: rgba(231, 76, 60, 0.2);
+    border-color: #e74c3c;
+    color: #ffecec;
+}
+
+.stat-upgrade-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.stat-upgrade-modal.open {
+    display: flex;
+}
+
+.stat-upgrade-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+}
+
+.stat-upgrade-card {
+    position: relative;
+    background: linear-gradient(180deg, #0f6cc4, #084f94);
+    border: 3px solid #0de6ff;
+    border-radius: 14px;
+    padding: 18px;
+    width: 320px;
+    color: #f6fbff;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    z-index: 2;
+}
+
+.stat-upgrade-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #0b2e53;
+    border: 2px solid #0de6ff;
+    color: #fff;
+    border-radius: 8px;
+    width: 26px;
+    height: 26px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.stat-upgrade-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+
+.stat-upgrade-desc {
+    font-size: 11px;
+    line-height: 1.3;
+    color: #d5efff;
+    margin-bottom: 10px;
+}
+
+.stat-upgrade-current {
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.stat-upgrade-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.stat-qty-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 2px solid #0de6ff;
+    background: #0b3560;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.stat-qty-value {
+    min-width: 26px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.stat-upgrade-cost {
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.stat-upgrade-confirm {
+    width: 100%;
+    padding: 8px;
+    border-radius: 10px;
+    border: 2px solid #1b6d2d;
+    background: linear-gradient(180deg, #7cf57f, #29b34c);
+    color: #0a2d10;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+body.modal-open {
+    overflow: hidden;
+}

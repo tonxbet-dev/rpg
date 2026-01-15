@@ -21,12 +21,33 @@ if (isset($_GET['action']) && isset($_GET['inv_id'])) {
     header("Location: index.php?page=player"); exit;
 }
 
-function renderSlot($userId, $slotName, $iconName, $title) {
+if (isset($_POST['upgrade_stat'])) {
+    $statKey = $_POST['stat_key'] ?? '';
+    $statAmount = $_POST['stat_amount'] ?? 1;
+    $result = applyStatUpgrade($currentUser['id'], $statKey, $statAmount);
+    $_SESSION['stat_upgrade_message'] = $result['message'];
+    $_SESSION['stat_upgrade_success'] = $result['success'] ? 1 : 0;
+    header("Location: index.php?page=player"); exit;
+}
+
+$statUpgradeMessage = $_SESSION['stat_upgrade_message'] ?? null;
+$statUpgradeSuccess = $_SESSION['stat_upgrade_success'] ?? null;
+unset($_SESSION['stat_upgrade_message'], $_SESSION['stat_upgrade_success']);
+
+if (empty($statDefinitions)) {
+    $statDefinitions = getStatDefinitions();
+}
+if (empty($baseStats)) {
+    $baseStats = getBaseStatsFromUser($currentUser);
+}
+
+function renderSlot($userId, $slotName, $iconName, $title, $slotNumber) {
     global $conn;
     $res = $conn->query("SELECT i.*, inv.id as inv_id FROM inventory inv JOIN items i ON inv.item_id = i.id WHERE inv.user_id = $userId AND inv.is_equipped = 1 AND i.slot = '$slotName' LIMIT 1");
     $item = $res->fetch_assoc();
     $filledClass = $item ? 'filled' : '';
     echo "<div class='inv-slot $filledClass' title='$title'>";
+    echo "<span class='slot-number'>$slotNumber</span>";
     if ($item) {
         echo "<i data-lucide='$iconName'></i>"; 
         echo "<a href='?page=player&action=unequip&inv_id={$item['inv_id']}' class='action-btn'>x</a>";
@@ -38,117 +59,154 @@ function renderSlot($userId, $slotName, $iconName, $title) {
 ?>
 
 <!-- ИНТЕРФЕЙС ПРОФИЛЯ -->
-<div class="char-inventory-wrapper">
-    <!-- Header -->
-    <div class="inv-header">
-        <div style="display:flex; gap:10px;">
-            <span style="font-weight:bold;"><?= $currentUser['username'] ?></span>
-            <span>[<?= $currentUser['level'] ?>]</span>
+<div class="char-inventory-wrapper player-profile">
+    <div class="profile-topbar">
+        <div class="profile-level-badge">
+            <div class="profile-level-number"><?= $currentUser['level'] ?></div>
+            <div class="profile-level-label">уровень</div>
         </div>
-        <div style="font-size:11px;">
-            <span>❤️ <?= $currentUser['hp'] ?>/<?= $currentUser['total_max_hp'] ?></span>
-            <span style="margin-left:10px; color:#3498db;">💧 100%</span>
+        <div class="profile-bars">
+            <div class="profile-bar">
+                <div class="profile-bar-title">Жизни</div>
+                <div class="profile-bar-track">
+                    <div class="profile-bar-fill" style="width: <?= min(100, ($currentUser['hp'] / max(1, $currentUser['total_max_hp'])) * 100) ?>%"></div>
+                </div>
+                <div class="profile-bar-value"><?= $currentUser['hp'] ?>/<?= $currentUser['total_max_hp'] ?></div>
+            </div>
         </div>
-        <div><a href="?page=shop" style="text-decoration:underline; color:#f1c40f;">В Магазин &raquo;</a></div>
+        <div class="profile-currency">
+            <div class="currency-chip">💰 <?= $currentUser['money'] ?></div>
+            <div class="currency-chip">⭐ <?= $currentUser['exp'] ?></div>
+        </div>
     </div>
 
-    <!-- Основной контейнер куклы -->
-    <div class="doll-container">
-        
-        <div class="doll-layout-grid">
+    <?php if ($statUpgradeMessage): ?>
+        <div class="stat-upgrade-message <?= $statUpgradeSuccess ? 'success' : 'error' ?>">
+            <?= htmlspecialchars($statUpgradeMessage) ?>
+        </div>
+    <?php endif; ?>
 
-            <!-- 0. LEFT STATS COLUMN -->
+    <div class="profile-title">ГЕРОЙ</div>
+
+    <div class="doll-container profile-doll">
+        <div class="doll-layout-grid">
             <div class="doll-stats-col-left">
-                <div style="text-align:center; font-weight:bold; margin-bottom:5px; border-bottom:1px solid #5c4a3a;">Характеристики</div>
-                <div class="doll-stat-row"><span class="doll-stat-label"><i data-lucide="heart" color="red"></i> Здоровье</span><span class="doll-stat-val"><?= $currentUser['total_max_hp'] ?></span></div>
-                <div class="doll-stat-row"><span class="doll-stat-label"><i data-lucide="biceps-flexed" color="red"></i> Сила</span><span class="doll-stat-val"><?= $currentUser['total_str'] ?></span></div>
-                <div class="doll-stat-row"><span class="doll-stat-label"><i data-lucide="zap" color="#e67e22"></i> Ловкость</span><span class="doll-stat-val">15</span></div>
-                <div class="doll-stat-row"><span class="doll-stat-label"><i data-lucide="activity" color="green"></i> Выносливость</span><span class="doll-stat-val">50</span></div>
-                <div class="doll-stat-row"><span class="doll-stat-label"><i data-lucide="fox" color="purple"></i> Хитрость</span><span class="doll-stat-val">25</span></div>
-                <div class="doll-stat-row"><span class="doll-stat-label"><i data-lucide="eye" color="blue"></i> Внимательность</span><span class="doll-stat-val">10</span></div>
-                <div class="doll-stat-row"><span class="doll-stat-label"><i data-lucide="smile" color="orange"></i> Харизма</span><span class="doll-stat-val">5</span></div>
-                <div style="margin-top:auto; padding-top:5px; border-top:1px solid #5c4a3a;">
-                    <div class="doll-stat-row"><span class="doll-stat-label"><i data-lucide="shield" color="blue"></i> Броня</span><span class="doll-stat-val"><?= $currentUser['total_def'] ?></span></div>
-                    <div class="doll-stat-row"><span class="doll-stat-label">Урон</span><span class="doll-stat-val">12-18</span></div>
+                <div class="stats-title">Характеристики</div>
+                <?php foreach ($statDefinitions as $statKey => $statData): ?>
+                    <div class="stat-row">
+                        <span class="stat-label">
+                            <i data-lucide="<?= $statData['icon'] ?>"></i>
+                            <?= $statData['label'] ?>
+                        </span>
+                        <span class="stat-value"><?= $baseStats[$statKey] ?></span>
+                        <button class="stat-plus-btn"
+                            type="button"
+                            data-stat-key="<?= $statKey ?>"
+                            data-stat-label="<?= htmlspecialchars($statData['label'], ENT_QUOTES) ?>"
+                            data-stat-desc="<?= htmlspecialchars($statData['description'], ENT_QUOTES) ?>"
+                            data-stat-current="<?= $baseStats[$statKey] ?>"
+                            data-stat-multiplier="<?= $statData['cost_multiplier'] ?>">
+                            +
+                        </button>
+                    </div>
+                <?php endforeach; ?>
+                <div class="stats-divider"></div>
+                <div class="stat-row compact">
+                    <span class="stat-label"><i data-lucide="swords"></i> Урон</span>
+                    <span class="stat-value"><?= $currentUser['damage_min'] ?>-<?= $currentUser['damage_max'] ?></span>
+                </div>
+                <div class="stat-row compact">
+                    <span class="stat-label"><i data-lucide="shield"></i> Броня</span>
+                    <span class="stat-value"><?= $currentUser['armor'] ?></span>
                 </div>
             </div>
 
-            <!-- 1. TOP ROW SPLIT -->
-            <!-- 1a. Top Left Corner -->
             <div class="doll-top-left">
-                <?php renderSlot($currentUser['id'], 'earrings', 'ear', 'Серьги'); ?>
+                <?php renderSlot($currentUser['id'], 'earrings', 'ear', 'Серьги', 1); ?>
             </div>
             
-            <!-- 1b. Top Center (4 slots) -->
             <div class="doll-top-center">
-                <?php renderSlot($currentUser['id'], 'necklace', 'gem', 'Ожерелье'); ?>
-                <?php renderSlot($currentUser['id'], 'helmet', 'crown', 'Шлем'); ?>
-                <?php renderSlot($currentUser['id'], 'amulet', 'sun', 'Амулет'); ?>
-                <div class="inv-slot" title="Доп. слот"><i data-lucide="sparkles"></i></div>
+                <?php renderSlot($currentUser['id'], 'necklace', 'gem', 'Ожерелье', 2); ?>
+                <?php renderSlot($currentUser['id'], 'helmet', 'crown', 'Шлем', 3); ?>
+                <?php renderSlot($currentUser['id'], 'amulet', 'sun', 'Амулет', 4); ?>
+                <div class="inv-slot" title="Доп. слот"><span class="slot-number">5</span><i data-lucide="sparkles"></i></div>
             </div>
             
-            <!-- 1c. Top Right Corner -->
             <div class="doll-top-right">
-                <div class="inv-slot" title="Доп. слот"><i data-lucide="sparkles"></i></div>
+                <div class="inv-slot" title="Доп. слот"><span class="slot-number">6</span><i data-lucide="sparkles"></i></div>
             </div>
 
-            <!-- 2. LEFT COLUMN (5 slots) -->
             <div class="doll-left-col">
-                <?php renderSlot($currentUser['id'], 'weapon', 'sword', 'Оружие'); ?>
-                <div class="inv-slot" title="Наручи"><i data-lucide="circle-dashed"></i></div>
-                <div class="inv-slot" title="Кольцо"><i data-lucide="circle-dot"></i></div>
-                <div class="inv-slot" title="Кольцо"><i data-lucide="circle-dot"></i></div>
-                <div class="inv-slot" title="Доп. слот лево"><i data-lucide="circle-dot"></i></div>
+                <?php renderSlot($currentUser['id'], 'weapon', 'sword', 'Оружие', 7); ?>
+                <div class="inv-slot" title="Наручи"><span class="slot-number">8</span><i data-lucide="circle-dashed"></i></div>
+                <div class="inv-slot" title="Кольцо"><span class="slot-number">9</span><i data-lucide="circle-dot"></i></div>
+                <div class="inv-slot" title="Кольцо"><span class="slot-number">10</span><i data-lucide="circle-dot"></i></div>
+                <div class="inv-slot" title="Доп. слот лево"><span class="slot-number">11</span><i data-lucide="circle-dot"></i></div>
             </div>
 
-            <!-- 3. CENTER AVATAR -->
             <div class="char-avatar-box">
-                <i data-lucide="user" size="80" color="#8b7d6b" style="opacity:0.5;"></i>
+                <i data-lucide="user" size="90" color="#8dd7ff" style="opacity:0.65;"></i>
                 <div class="char-info-overlay">
                     <b><?= $currentUser['username'] ?></b><br>
                     Уровень: <?= $currentUser['level'] ?>
                 </div>
             </div>
 
-            <!-- 4. RIGHT COLUMN (5 slots) -->
             <div class="doll-right-col">
-                <?php renderSlot($currentUser['id'], 'armor', 'shirt', 'Броня'); ?>
-                <div class="inv-slot" title="Перчатки"><i data-lucide="hand"></i></div>
-                <div class="inv-slot" title="Плащ"><i data-lucide="wind"></i></div>
-                <div class="inv-slot" title="Кольцо"><i data-lucide="circle-dot"></i></div>
-                <div class="inv-slot" title="Доп. слот право"><i data-lucide="circle-dot"></i></div>
+                <?php renderSlot($currentUser['id'], 'armor', 'shirt', 'Броня', 12); ?>
+                <div class="inv-slot" title="Перчатки"><span class="slot-number">13</span><i data-lucide="hand"></i></div>
+                <div class="inv-slot" title="Плащ"><span class="slot-number">14</span><i data-lucide="wind"></i></div>
+                <div class="inv-slot" title="Кольцо"><span class="slot-number">15</span><i data-lucide="circle-dot"></i></div>
+                <div class="inv-slot" title="Доп. слот право"><span class="slot-number">16</span><i data-lucide="circle-dot"></i></div>
             </div>
 
-            <!-- 5. RIGHT STATS COLUMN -->
             <div class="doll-stats-col-right">
-                <div style="text-align:center; font-weight:bold; margin-bottom:5px; border-bottom:1px solid #5c4a3a;">Статистика</div>
-                <div class="doll-stat-row"><span class="doll-stat-label"><i data-lucide="trophy" color="green"></i> Побед</span><span class="doll-stat-val">149</span></div>
-                <div class="doll-stat-row"><span class="doll-stat-label"><i data-lucide="skull" color="red"></i> Поражений</span><span class="doll-stat-val">17</span></div>
-                <div class="doll-stat-row"><span class="doll-stat-label">Ничьих</span><span class="doll-stat-val">0</span></div>
-                <div style="margin-top:10px; border-top:1px dashed #999;"></div>
-                <div class="doll-stat-row"><span class="doll-stat-label">Опыт</span><span class="doll-stat-val">121k</span></div>
-                <div class="doll-stat-row"><span class="doll-stat-label">Доблесть</span><span class="doll-stat-val">500</span></div>
+                <div class="stats-title">Статистика</div>
+                <div class="stat-row compact">
+                    <span class="stat-label"><i data-lucide="trophy"></i> Побед</span>
+                    <span class="stat-value"><?= (int)($currentUser['wins'] ?? 0) ?></span>
+                </div>
+                <div class="stat-row compact">
+                    <span class="stat-label"><i data-lucide="skull"></i> Поражений</span>
+                    <span class="stat-value"><?= (int)($currentUser['losses'] ?? 0) ?></span>
+                </div>
+                <div class="stat-row compact">
+                    <span class="stat-label"><i data-lucide="minus"></i> Ничьих</span>
+                    <span class="stat-value"><?= (int)($currentUser['draws'] ?? 0) ?></span>
+                </div>
+                <div class="stats-divider"></div>
+                <div class="stat-row compact">
+                    <span class="stat-label"><i data-lucide="zap"></i> Шанс удара</span>
+                    <span class="stat-value"><?= $currentUser['hit_chance'] ?>%</span>
+                </div>
+                <div class="stat-row compact">
+                    <span class="stat-label"><i data-lucide="sparkles"></i> Крит</span>
+                    <span class="stat-value"><?= $currentUser['crit_chance'] ?>%</span>
+                </div>
+                <div class="stat-row compact">
+                    <span class="stat-label"><i data-lucide="eye"></i> Уклонение</span>
+                    <span class="stat-value"><?= $currentUser['dodge_chance'] ?>%</span>
+                </div>
+                <div class="stat-row compact">
+                    <span class="stat-label"><i data-lucide="shopping-bag"></i> Бонус золота</span>
+                    <span class="stat-value"><?= $currentUser['gold_bonus'] ?>%</span>
+                </div>
             </div>
 
-            <!-- 6. BOTTOM ROW SPLIT -->
-            <!-- 6a. Bottom Left Corner -->
             <div class="doll-btm-left">
-                <div class="inv-slot" title="Пояс"><i data-lucide="minus"></i></div>
+                <div class="inv-slot" title="Пояс"><span class="slot-number">17</span><i data-lucide="minus"></i></div>
             </div>
             
-            <!-- 6b. Bottom Center (4 slots) -->
             <div class="doll-btm-center">
-                <div class="inv-slot" title="Поножи"><i data-lucide="columns-2"></i></div>
-                <?php renderSlot($currentUser['id'], 'boots', 'footprints', 'Сапоги'); ?>
-                <div class="inv-slot" title="Слот"><i data-lucide="sparkles"></i></div>
-                <div class="inv-slot" title="Слот"><i data-lucide="sparkles"></i></div>
+                <div class="inv-slot" title="Поножи"><span class="slot-number">18</span><i data-lucide="columns-2"></i></div>
+                <?php renderSlot($currentUser['id'], 'boots', 'footprints', 'Сапоги', 19); ?>
+                <div class="inv-slot" title="Слот"><span class="slot-number">20</span><i data-lucide="sparkles"></i></div>
+                <div class="inv-slot" title="Слот"><span class="slot-number">21</span><i data-lucide="sparkles"></i></div>
             </div>
             
-            <!-- 6c. Bottom Right Corner -->
             <div class="doll-btm-right">
-                <div class="inv-slot" title="Слот"><i data-lucide="sparkles"></i></div>
+                <div class="inv-slot" title="Слот"><span class="slot-number">22</span><i data-lucide="sparkles"></i></div>
             </div>
-
         </div>
 
         <div class="inv-actions">
@@ -157,9 +215,8 @@ function renderSlot($userId, $slotName, $iconName, $title) {
         </div>
     </div>
 
-    <!-- РЮКЗАК -->
     <div class="backpack-area">
-        <div style="font-size:12px; font-weight:bold; margin-bottom:5px;">🎒 Рюкзак</div>
+        <div class="backpack-title">🎒 Рюкзак</div>
         <div class="backpack-grid">
             <?php
             $sql = "SELECT inv.id as inv_id, i.* FROM inventory inv JOIN items i ON inv.item_id = i.id WHERE inv.user_id = {$currentUser['id']} AND inv.is_equipped = 0";
@@ -178,8 +235,99 @@ function renderSlot($userId, $slotName, $iconName, $title) {
                     ?>
                 </a>
             <?php endwhile; else: ?>
-                <span style="color:#777; font-size:11px; padding:5px;">Пусто</span>
+                <span class="backpack-empty">Пусто</span>
             <?php endif; ?>
         </div>
     </div>
 </div>
+
+<div class="stat-upgrade-modal" id="stat-upgrade-modal" aria-hidden="true">
+    <div class="stat-upgrade-overlay" data-modal-close></div>
+    <div class="stat-upgrade-card" role="dialog" aria-modal="true">
+        <button class="stat-upgrade-close" type="button" data-modal-close>×</button>
+        <div class="stat-upgrade-title" id="stat-modal-title"></div>
+        <div class="stat-upgrade-desc" id="stat-modal-desc"></div>
+        <div class="stat-upgrade-current">Текущее значение: <span id="stat-modal-current"></span></div>
+        <div class="stat-upgrade-controls">
+            <button type="button" class="stat-qty-btn" data-qty="-1">-</button>
+            <span class="stat-qty-value" id="stat-modal-qty">1</span>
+            <button type="button" class="stat-qty-btn" data-qty="1">+</button>
+        </div>
+        <div class="stat-upgrade-cost">Стоимость: <span id="stat-modal-cost"></span> 💰</div>
+        <form method="post" class="stat-upgrade-form">
+            <input type="hidden" name="upgrade_stat" value="1">
+            <input type="hidden" name="stat_key" id="stat-modal-key">
+            <input type="hidden" name="stat_amount" id="stat-modal-amount">
+            <button type="submit" class="stat-upgrade-confirm">Увеличить</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const STAT_COST_BASE = <?= STAT_COST_BASE ?>;
+    const STAT_COST_GROWTH = <?= STAT_COST_GROWTH ?>;
+    const modal = document.getElementById('stat-upgrade-modal');
+    const modalTitle = document.getElementById('stat-modal-title');
+    const modalDesc = document.getElementById('stat-modal-desc');
+    const modalCurrent = document.getElementById('stat-modal-current');
+    const modalQty = document.getElementById('stat-modal-qty');
+    const modalCost = document.getElementById('stat-modal-cost');
+    const modalKey = document.getElementById('stat-modal-key');
+    const modalAmount = document.getElementById('stat-modal-amount');
+    let modalBaseValue = 1;
+    let modalMultiplier = 1;
+
+    function calculateUpgradeCost(currentValue, amount, multiplier) {
+        let total = 0;
+        for (let i = 0; i < amount; i++) {
+            total += STAT_COST_BASE + (currentValue + i) * STAT_COST_GROWTH;
+        }
+        return Math.ceil(total * multiplier);
+    }
+
+    function updateModalCost(amount) {
+        const cost = calculateUpgradeCost(modalBaseValue, amount, modalMultiplier);
+        modalQty.textContent = amount;
+        modalAmount.value = amount;
+        modalCost.textContent = cost;
+    }
+
+    function openModal(button) {
+        modalBaseValue = parseInt(button.dataset.statCurrent, 10) || 1;
+        modalMultiplier = parseFloat(button.dataset.statMultiplier) || 1;
+        modalTitle.textContent = button.dataset.statLabel;
+        modalDesc.textContent = button.dataset.statDesc;
+        modalCurrent.textContent = modalBaseValue;
+        modalKey.value = button.dataset.statKey;
+        updateModalCost(1);
+        modal.classList.add('open');
+        document.body.classList.add('modal-open');
+    }
+
+    function closeModal() {
+        modal.classList.remove('open');
+        document.body.classList.remove('modal-open');
+    }
+
+    document.querySelectorAll('.stat-plus-btn').forEach((btn) => {
+        btn.addEventListener('click', () => openModal(btn));
+    });
+
+    document.querySelectorAll('[data-modal-close]').forEach((el) => {
+        el.addEventListener('click', closeModal);
+    });
+
+    document.querySelectorAll('.stat-qty-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            let amount = parseInt(modalAmount.value, 10) || 1;
+            amount += parseInt(btn.dataset.qty, 10);
+            if (amount < 1) amount = 1;
+            if (amount > 50) amount = 50;
+            updateModalCost(amount);
+        });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeModal();
+    });
+</script>

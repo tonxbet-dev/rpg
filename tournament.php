@@ -4,17 +4,87 @@
  * Подключается в index.php
  */
 
+function getTournamentHitChance($attacker, $defender) {
+    $chance = (int)$attacker['hit_chance'] - (int)$defender['dodge_chance'];
+    return max(5, min(95, $chance));
+}
+
+function getTournamentCritChance($attacker, $defender) {
+    $chance = (int)$attacker['crit_chance'] - (int)$defender['crit_resist'];
+    return max(0, min(60, $chance));
+}
+
+function calculateTournamentDamage($attacker, $defender) {
+    $raw = rand((int)$attacker['damage_min'], (int)$attacker['damage_max']);
+    $mitigation = (int)floor((int)$defender['total_def'] * 0.6);
+    return max(1, $raw - $mitigation);
+}
+
 // Старт турнира
 if (isset($_POST['start_tournament'])) {
     $teamA = [];
     // Игрок
-    $teamA[] = ['id' => 'u'.$currentUser['id'], 'name' => $currentUser['username'], 'hp' => $currentUser['total_max_hp'], 'max_hp' => $currentUser['total_max_hp'], 'str' => $currentUser['total_str'], 'def' => $currentUser['total_def'], 'alive' => true, 'is_player' => true];
+    $teamA[] = [
+        'id' => 'u'.$currentUser['id'],
+        'name' => $currentUser['username'],
+        'hp' => $currentUser['total_max_hp'],
+        'max_hp' => $currentUser['total_max_hp'],
+        'str' => $currentUser['total_str'],
+        'def' => $currentUser['total_def'],
+        'damage_min' => $currentUser['damage_min'],
+        'damage_max' => $currentUser['damage_max'],
+        'total_def' => $currentUser['total_def'],
+        'hit_chance' => $currentUser['hit_chance'],
+        'crit_chance' => $currentUser['crit_chance'],
+        'crit_resist' => $currentUser['crit_resist'],
+        'dodge_chance' => $currentUser['dodge_chance'],
+        'alive' => true,
+        'is_player' => true
+    ];
     // 9 ботов союзников
-    for($i=1; $i<10; $i++) $teamA[] = ['id' => 'a'.$i, 'name' => "Bot Ally $i", 'hp' => 100, 'max_hp' => 100, 'str' => 10, 'def' => 5, 'alive' => true, 'is_player' => false];
+    for($i=1; $i<10; $i++) {
+        $allyStats = buildBotCombatStats(max(1, (int)$currentUser['level']), 'balanced');
+        $teamA[] = [
+            'id' => 'a'.$i,
+            'name' => "Бот союзник $i",
+            'hp' => $allyStats['total_max_hp'],
+            'max_hp' => $allyStats['total_max_hp'],
+            'str' => $allyStats['total_str'],
+            'def' => $allyStats['total_def'],
+            'damage_min' => $allyStats['damage_min'],
+            'damage_max' => $allyStats['damage_max'],
+            'total_def' => $allyStats['total_def'],
+            'hit_chance' => $allyStats['hit_chance'],
+            'crit_chance' => $allyStats['crit_chance'],
+            'crit_resist' => $allyStats['crit_resist'],
+            'dodge_chance' => $allyStats['dodge_chance'],
+            'alive' => true,
+            'is_player' => false
+        ];
+    }
     
     $teamB = [];
     // 10 ботов врагов
-    for($i=0; $i<10; $i++) $teamB[] = ['id' => 'b'.$i, 'name' => "Bot Enemy $i", 'hp' => 100, 'max_hp' => 100, 'str' => 10, 'def' => 5, 'alive' => true, 'is_player' => false];
+    for($i=0; $i<10; $i++) {
+        $enemyStats = buildBotCombatStats(max(1, (int)$currentUser['level']), 'brutal');
+        $teamB[] = [
+            'id' => 'b'.$i,
+            'name' => "Бот враг $i",
+            'hp' => $enemyStats['total_max_hp'],
+            'max_hp' => $enemyStats['total_max_hp'],
+            'str' => $enemyStats['total_str'],
+            'def' => $enemyStats['total_def'],
+            'damage_min' => $enemyStats['damage_min'],
+            'damage_max' => $enemyStats['damage_max'],
+            'total_def' => $enemyStats['total_def'],
+            'hit_chance' => $enemyStats['hit_chance'],
+            'crit_chance' => $enemyStats['crit_chance'],
+            'crit_resist' => $enemyStats['crit_resist'],
+            'dodge_chance' => $enemyStats['dodge_chance'],
+            'alive' => true,
+            'is_player' => false
+        ];
+    }
     
     $_SESSION['tournament'] = [
         'teamA' => $teamA,
@@ -86,13 +156,20 @@ if (isset($_POST['process_tournament']) && $t['active']) {
         }
 
         if ($target) {
-            // Упрощенный расчет для массового боя
-            $dmg = max(1, $fighter['str'] * 2 - $target['def']);
-            $target['hp'] -= $dmg;
-            if ($target['hp'] <= 0) { $target['hp'] = 0; $target['alive'] = false; }
-            
             $color = $fighter['is_player'] ? 'green' : '#555';
-            $roundLog .= "<div style='color:$color'>{$fighter['name']} -> {$target['name']} (-$dmg)</div>";
+            $hitChance = getTournamentHitChance($fighter, $target);
+            if (rand(1, 100) > $hitChance) {
+                $roundLog .= "<div style='color:$color'>{$fighter['name']} -> {$target['name']} (промах)</div>";
+            } else {
+                $dmg = calculateTournamentDamage($fighter, $target);
+                $critChance = getTournamentCritChance($fighter, $target);
+                $isCrit = (rand(1, 100) <= $critChance);
+                if ($isCrit) $dmg = (int)floor($dmg * 1.5);
+                $target['hp'] -= $dmg;
+                if ($target['hp'] <= 0) { $target['hp'] = 0; $target['alive'] = false; }
+                $critLabel = $isCrit ? " <span style='color:#f39c12'>КРИТ</span>" : '';
+                $roundLog .= "<div style='color:$color'>{$fighter['name']} -> {$target['name']} (-$dmg)$critLabel</div>";
+            }
         }
     }
 
@@ -105,12 +182,20 @@ if (isset($_POST['process_tournament']) && $t['active']) {
         
         if (!empty($liveEnemies)) {
             $target = &$t['teamA'][$liveEnemies[array_rand($liveEnemies)]];
-            $dmg = max(1, $fighter['str'] * 2 - $target['def']);
-            $target['hp'] -= $dmg;
-            if ($target['hp'] <= 0) { $target['hp'] = 0; $target['alive'] = false; }
-            
             $color = $target['is_player'] ? 'red' : 'brown';
-            $roundLog .= "<div style='color:$color'>{$fighter['name']} -> {$target['name']} (-$dmg)</div>";
+            $hitChance = getTournamentHitChance($fighter, $target);
+            if (rand(1, 100) > $hitChance) {
+                $roundLog .= "<div style='color:$color'>{$fighter['name']} -> {$target['name']} (промах)</div>";
+            } else {
+                $dmg = calculateTournamentDamage($fighter, $target);
+                $critChance = getTournamentCritChance($fighter, $target);
+                $isCrit = (rand(1, 100) <= $critChance);
+                if ($isCrit) $dmg = (int)floor($dmg * 1.5);
+                $target['hp'] -= $dmg;
+                if ($target['hp'] <= 0) { $target['hp'] = 0; $target['alive'] = false; }
+                $critLabel = $isCrit ? " <span style='color:#f39c12'>КРИТ</span>" : '';
+                $roundLog .= "<div style='color:$color'>{$fighter['name']} -> {$target['name']} (-$dmg)$critLabel</div>";
+            }
         }
     }
 
@@ -118,8 +203,19 @@ if (isset($_POST['process_tournament']) && $t['active']) {
     $aliveA = 0; foreach($t['teamA'] as $f) if($f['alive']) $aliveA++;
     $aliveB = 0; foreach($t['teamB'] as $f) if($f['alive']) $aliveB++;
 
-    if ($aliveA == 0) { $t['active'] = false; $roundLog .= "<h3>🔴 ПОРАЖЕНИЕ!</h3>"; }
-    elseif ($aliveB == 0) { $t['active'] = false; $roundLog .= "<h3>🔵 ПОБЕДА!</h3>"; }
+    if ($aliveA == 0 && $aliveB == 0) {
+        $t['active'] = false;
+        $roundLog .= "<h3>⚖️ НИЧЬЯ!</h3>";
+        $conn->query("UPDATE users SET draws = draws + 1 WHERE id = {$currentUser['id']}");
+    } elseif ($aliveA == 0) {
+        $t['active'] = false;
+        $roundLog .= "<h3>🔴 ПОРАЖЕНИЕ!</h3>";
+        $conn->query("UPDATE users SET losses = losses + 1 WHERE id = {$currentUser['id']}");
+    } elseif ($aliveB == 0) {
+        $t['active'] = false;
+        $roundLog .= "<h3>🔵 ПОБЕДА!</h3>";
+        $conn->query("UPDATE users SET wins = wins + 1 WHERE id = {$currentUser['id']}");
+    }
 
     array_unshift($t['log'], $roundLog);
     $t['turn']++;

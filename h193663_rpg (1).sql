@@ -120,9 +120,22 @@ CREATE TABLE `users` (
   `max_hp` int DEFAULT '100',
   `strength` int DEFAULT '10',
   `defense` int DEFAULT '10',
+  `armor` int DEFAULT '0',
+  `damage_min` int DEFAULT '0',
+  `damage_max` int DEFAULT '0',
   `level` int DEFAULT '1',
   `exp` int DEFAULT '0',
   `money` int DEFAULT '100',
+  `wins` int DEFAULT '0',
+  `losses` int DEFAULT '0',
+  `draws` int DEFAULT '0',
+  `stat_health` int DEFAULT '1',
+  `stat_strength` int DEFAULT '1',
+  `stat_agility` int DEFAULT '1',
+  `stat_stamina` int DEFAULT '1',
+  `stat_perception` int DEFAULT '1',
+  `stat_cunning` int DEFAULT '1',
+  `stat_charisma` int DEFAULT '1',
   `avatar` varchar(255) DEFAULT 'default.jpg',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -134,7 +147,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'Roman','$2y$10$J.6bV/igM02M17nAXc8oYexvMSm.9xMZbsUCqzprdpcWRUq1WMgFG',13,100,10,10,1,65,75,'default.jpg');
+INSERT INTO `users` VALUES (1,'Roman','$2y$10$J.6bV/igM02M17nAXc8oYexvMSm.9xMZbsUCqzprdpcWRUq1WMgFG',13,100,10,10,0,0,0,1,65,75,0,0,0,1,1,1,1,1,1,1,'default.jpg');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
