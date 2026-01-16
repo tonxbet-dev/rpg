@@ -71,6 +71,24 @@ INSERT INTO `inventory` VALUES (2,1,2,0);
 UNLOCK TABLES;
 
 --
+-- Table structure for table `shop_categories`
+--
+
+DROP TABLE IF EXISTS `shop_categories`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `shop_categories` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `slot_number` int NOT NULL,
+  `status` enum('active','hidden') DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `slot_number` (`slot_number`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `items`
 --
 
@@ -80,12 +98,21 @@ DROP TABLE IF EXISTS `items`;
 CREATE TABLE `items` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
-  `slot` enum('weapon','armor','helmet','boots') NOT NULL,
+  `slot` varchar(50) NOT NULL,
   `stat_str` int DEFAULT '0',
   `stat_def` int DEFAULT '0',
   `stat_hp` int DEFAULT '0',
   `price` int DEFAULT '0',
   `image` varchar(255) DEFAULT '',
+  `category_id` int DEFAULT NULL,
+  `required_exp` int DEFAULT '0',
+  `stat_health` int DEFAULT '0',
+  `stat_strength` int DEFAULT '0',
+  `stat_agility` int DEFAULT '0',
+  `stat_stamina` int DEFAULT '0',
+  `stat_perception` int DEFAULT '0',
+  `stat_cunning` int DEFAULT '0',
+  `stat_charisma` int DEFAULT '0',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -96,12 +123,13 @@ CREATE TABLE `items` (
 
 LOCK TABLES `items` WRITE;
 /*!40000 ALTER TABLE `items` DISABLE KEYS */;
-INSERT INTO `items` VALUES (1,'Деревянный меч','weapon',5,0,0,10,'');
-INSERT INTO `items` VALUES (2,'Стальной меч','weapon',15,2,0,50,'');
-INSERT INTO `items` VALUES (3,'Кожаная куртка','armor',0,5,20,20,'');
-INSERT INTO `items` VALUES (4,'Кольчуга','armor',-2,15,50,100,'');
-INSERT INTO `items` VALUES (5,'Старый шлем','helmet',0,3,10,15,'');
-INSERT INTO `items` VALUES (6,'Тяжелые сапоги','boots',1,2,5,15,'');
+INSERT INTO `items` (`id`,`name`,`slot`,`stat_str`,`stat_def`,`stat_hp`,`price`,`image`,`category_id`,`required_exp`,`stat_health`,`stat_strength`,`stat_agility`,`stat_stamina`,`stat_perception`,`stat_cunning`,`stat_charisma`) VALUES
+(1,'Деревянный меч','weapon',5,0,0,10,'',NULL,0,0,0,0,0,0,0,0),
+(2,'Стальной меч','weapon',15,2,0,50,'',NULL,0,0,0,0,0,0,0,0),
+(3,'Кожаная куртка','armor',0,5,20,20,'',NULL,0,0,0,0,0,0,0,0),
+(4,'Кольчуга','armor',-2,15,50,100,'',NULL,0,0,0,0,0,0,0,0),
+(5,'Старый шлем','helmet',0,3,10,15,'',NULL,0,0,0,0,0,0,0,0),
+(6,'Тяжелые сапоги','boots',1,2,5,15,'',NULL,0,0,0,0,0,0,0,0);
 /*!40000 ALTER TABLE `items` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -120,9 +148,22 @@ CREATE TABLE `users` (
   `max_hp` int DEFAULT '100',
   `strength` int DEFAULT '10',
   `defense` int DEFAULT '10',
+  `armor` int DEFAULT '0',
+  `damage_min` int DEFAULT '0',
+  `damage_max` int DEFAULT '0',
   `level` int DEFAULT '1',
   `exp` int DEFAULT '0',
   `money` int DEFAULT '100',
+  `wins` int DEFAULT '0',
+  `losses` int DEFAULT '0',
+  `draws` int DEFAULT '0',
+  `stat_health` int DEFAULT '1',
+  `stat_strength` int DEFAULT '1',
+  `stat_agility` int DEFAULT '1',
+  `stat_stamina` int DEFAULT '1',
+  `stat_perception` int DEFAULT '1',
+  `stat_cunning` int DEFAULT '1',
+  `stat_charisma` int DEFAULT '1',
   `avatar` varchar(255) DEFAULT 'default.jpg',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -134,7 +175,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'Roman','$2y$10$J.6bV/igM02M17nAXc8oYexvMSm.9xMZbsUCqzprdpcWRUq1WMgFG',13,100,10,10,1,65,75,'default.jpg');
+INSERT INTO `users` VALUES (1,'Roman','$2y$10$J.6bV/igM02M17nAXc8oYexvMSm.9xMZbsUCqzprdpcWRUq1WMgFG',13,100,10,10,0,0,0,1,65,75,0,0,0,1,1,1,1,1,1,1,'default.jpg');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 

@@ -5,10 +5,74 @@
  */
 
 $turnDuration = 15; // Время на ход в секундах
+require_once 'battle_phrases.php';
+
+$zonesLabel = [1 => 'Голова', 2 => 'Корпус', 3 => 'Живот', 4 => 'Пах', 5 => 'Ноги'];
+$zonesAccusative = [1 => 'Голову', 2 => 'Корпус', 3 => 'Живот', 4 => 'Пах', 5 => 'Ноги'];
+
+function formatZoneList($zones, $names) {
+    $labels = [];
+    foreach ($zones as $zone) {
+        if (isset($names[$zone])) {
+            $labels[] = $names[$zone];
+        }
+    }
+    $count = count($labels);
+    if ($count === 0) return 'ничего';
+    if ($count === 1) return $labels[0];
+    if ($count === 2) return $labels[0] . ' и ' . $labels[1];
+    return implode(', ', array_slice($labels, 0, -1)) . ' и ' . $labels[$count - 1];
+}
+
+function normalizeDefenseZones($input, $zoneCount = 5, $required = 2) {
+    $zones = [];
+    if (is_array($input)) {
+        foreach ($input as $zone) {
+            $zone = (int)$zone;
+            if ($zone >= 1 && $zone <= $zoneCount) {
+                $zones[] = $zone;
+            }
+        }
+    }
+    $zones = array_values(array_unique($zones));
+    if (count($zones) > $required) {
+        $zones = array_slice($zones, 0, $required);
+    }
+    while (count($zones) < $required) {
+        $candidate = rand(1, $zoneCount);
+        if (!in_array($candidate, $zones, true)) {
+            $zones[] = $candidate;
+        }
+    }
+    return $zones;
+}
+
+function calculateSelfDamage($attacker) {
+    $min = max(1, (int)floor($attacker['damage_min'] * 0.4));
+    $max = max($min, (int)floor($attacker['damage_max'] * 0.6));
+    return rand($min, $max);
+}
+
+function getEffectiveHitChance($attacker, $defender) {
+    $chance = (int)$attacker['hit_chance'] - (int)$defender['dodge_chance'];
+    return max(5, min(95, $chance));
+}
+
+function getEffectiveCritChance($attacker, $defender) {
+    $chance = (int)$attacker['crit_chance'] - (int)$defender['crit_resist'];
+    return max(0, min(60, $chance));
+}
+
+function calculateBattleDamage($attacker, $defender) {
+    $raw = rand((int)$attacker['damage_min'], (int)$attacker['damage_max']);
+    $mitigation = (int)floor((int)$defender['total_def'] * 0.6);
+    return max(1, $raw - $mitigation);
+}
 
 // Инициализация боя
 if (!isset($_SESSION['battle'])) {
-    $botMaxHp = 100;
+    $botLevel = max(1, (int)$currentUser['level']);
+    $botStats = buildBotCombatStats($botLevel, 'brutal');
     $_SESSION['battle'] = [
         'id' => uniqid(),
         'turn' => 1,
@@ -18,11 +82,19 @@ if (!isset($_SESSION['battle'])) {
         'turn_deadline' => time() + $turnDuration, 
         'enemy' => [
             'name' => 'Разбойник',
-            'level' => 1,
-            'hp' => $botMaxHp,
-            'max_hp' => $botMaxHp,
-            'str' => 10,
-            'def' => 5,
+            'level' => $botLevel,
+            'hp' => $botStats['total_max_hp'],
+            'max_hp' => $botStats['total_max_hp'],
+            'str' => $botStats['total_str'],
+            'def' => $botStats['total_def'],
+            'total_def' => $botStats['total_def'],
+            'damage_min' => $botStats['damage_min'],
+            'damage_max' => $botStats['damage_max'],
+            'hit_chance' => $botStats['hit_chance'],
+            'crit_chance' => $botStats['crit_chance'],
+            'crit_resist' => $botStats['crit_resist'],
+            'dodge_chance' => $botStats['dodge_chance'],
+            'gold_bonus' => $botStats['gold_bonus'],
             'avatar' => '' 
         ]
     ];
@@ -45,55 +117,139 @@ if (isset($_POST['process_turn']) && $battle['active']) {
     
     // 1. Выбор зон игрока
     if ($isTimeout) {
-        $playerAtk = 0; 
-        $playerDef = 0; 
-        $logHeader = "<span style='color:#7f8c8d'>⌛ Время истекло! Пропуск хода.</span>";
+        $playerAtk = 0;
+        $playerDefZones = [];
+        $logHeader = "<div class='log-line'><span style='color:#7f8c8d'>⌛ Время истекло! Пропуск хода.</span></div>";
     } else {
-        $playerAtk = $_POST['attack_zone'] ?? rand(1, 3);
-        $playerDef = $_POST['def_zone'] ?? rand(1, 3);
+        $playerAtk = $_POST['attack_zone'] ?? rand(1, 5);
+        $playerAtk = max(1, min(5, (int)$playerAtk));
+        $playerDefZones = normalizeDefenseZones($_POST['def_zones'] ?? [], 5, 2);
         $logHeader = "";
     }
 
     // 2. Выбор зон бота
-    $botAtk = rand(1, 3);
-    $botDef = rand(1, 3);
+    $botAtk = rand(1, 5);
+    $botDefZones = normalizeDefenseZones([], 5, 2);
 
-    $zonesName = [0=>'воздух', 1=>'голову', 2=>'корпус', 3=>'ноги'];
+    $zonesName = [0=>'воздух'] + $zonesAccusative;
     $turnContent = "";
 
-    // Логика ударов (как раньше)
+    // Логика ударов
+    $botDefZonesLabel = formatZoneList($botDefZones, $zonesAccusative);
+    $playerDefZonesLabel = formatZoneList($playerDefZones, $zonesAccusative);
+
     if ($playerAtk > 0) {
-        if ($playerAtk == $botDef) {
-            $turnContent .= "<div class='log-line'>⚔️ Вы ударили в <b>{$zonesName[$playerAtk]}</b>, но <span class='log-block'>блок</span>.</div>";
+        $context = [
+            'attacker' => 'Вы',
+            'defender' => $enemy['name'],
+            'zone' => $zonesName[$playerAtk],
+            'defZones' => $botDefZonesLabel
+        ];
+        if (in_array($playerAtk, $botDefZones, true)) {
+            $turnContent .= "<div class='log-line'>" . getBattlePhrase('defense', 'block', $context) . "</div>";
         } else {
-            $dmg = max(1, ($currentUser['total_str'] * 2) - $enemy['def'] + rand(-2, 2));
-            if (rand(1, 100) <= 10) { $dmg = floor($dmg * 1.5); $turnContent .= "<div class='log-line'>⚔️ <span class='log-crit'>КРИТ!</span> Вы пробили <b>{$zonesName[$playerAtk]}</b> на <span class='log-dmg'>-$dmg</span>.</div>"; }
-            else { $turnContent .= "<div class='log-line'>⚔️ Вы ударили в <b>{$zonesName[$playerAtk]}</b> на <span class='log-dmg'>-$dmg</span>.</div>"; }
-            $enemy['hp'] -= $dmg;
+            if (rand(1, 100) <= 4) {
+                $selfDmg = calculateSelfDamage($currentUser);
+                $currentUser['hp'] = max(0, $currentUser['hp'] - $selfDmg);
+                $conn->query("UPDATE users SET hp = {$currentUser['hp']} WHERE id = {$currentUser['id']}");
+                $context['selfDamage'] = "<span class='log-dmg'>-$selfDmg</span>";
+                $turnContent .= "<div class='log-line'>" . getBattlePhrase('attack', 'self', $context) . "</div>";
+            } else {
+                $hitChance = getEffectiveHitChance($currentUser, $enemy);
+                if (rand(1, 100) > $hitChance) {
+                    $turnContent .= "<div class='log-line'>" . getBattlePhrase('defense', 'dodge', $context) . "</div>";
+                } else {
+                    $defRoll = rand(1, 100);
+                    $defType = $defRoll <= 12 ? 'panic' : ($defRoll <= 32 ? 'dance' : 'fail');
+                    $turnContent .= "<div class='log-line'>" . getBattlePhrase('defense', $defType, $context) . "</div>";
+
+                    $dmg = calculateBattleDamage($currentUser, $enemy);
+                    $glance = rand(1, 100) <= 12;
+                    if ($glance) {
+                        $dmg = max(1, (int)floor($dmg * 0.6));
+                    }
+
+                    $critChance = getEffectiveCritChance($currentUser, $enemy);
+                    $isCrit = (!$glance && rand(1, 100) <= $critChance);
+                    if ($isCrit) {
+                        $dmg = (int)floor($dmg * 1.5);
+                        $context['damage'] = "<span class='log-dmg'>-$dmg</span>";
+                        $turnContent .= "<div class='log-line'>" . getBattlePhrase('attack', 'crit', $context) . "</div>";
+                    } else {
+                        $context['damage'] = "<span class='log-dmg'>-$dmg</span>";
+                        $turnContent .= "<div class='log-line'>" . getBattlePhrase('attack', $glance ? 'glance' : 'hit', $context) . "</div>";
+                    }
+                    $enemy['hp'] -= $dmg;
+                }
+            }
         }
     }
 
-    if ($botAtk == $playerDef && $playerDef > 0) {
-        $turnContent .= "<div class='log-line'>🛡️ Враг ударил в <b>{$zonesName[$botAtk]}</b>, но <span class='log-block'>Вы поставили блок</span>.</div>";
+    $context = [
+        'attacker' => $enemy['name'],
+        'defender' => $currentUser['username'],
+        'zone' => $zonesName[$botAtk],
+        'defZones' => $playerDefZonesLabel
+    ];
+
+    if (!empty($playerDefZones) && in_array($botAtk, $playerDefZones, true)) {
+        $turnContent .= "<div class='log-line'>" . getBattlePhrase('defense', 'block', $context) . "</div>";
     } else {
-        $botDmg = max(1, ($enemy['str'] * 2) - $currentUser['total_def'] + rand(-1, 1));
-        $currentUser['hp'] -= $botDmg;
-        $conn->query("UPDATE users SET hp = {$currentUser['hp']} WHERE id = {$currentUser['id']}");
-        $turnContent .= "<div class='log-line'>🩸 Враг ударил в <b>{$zonesName[$botAtk]}</b> на <span class='log-dmg'>-$botDmg</span>.</div>";
+        if (rand(1, 100) <= 4) {
+            $selfDmg = calculateSelfDamage($enemy);
+            $enemy['hp'] = max(0, $enemy['hp'] - $selfDmg);
+            $context['selfDamage'] = "<span class='log-dmg'>-$selfDmg</span>";
+            $turnContent .= "<div class='log-line'>" . getBattlePhrase('attack', 'self', $context) . "</div>";
+        } else {
+            $hitChance = getEffectiveHitChance($enemy, $currentUser);
+            if (rand(1, 100) > $hitChance) {
+                $turnContent .= "<div class='log-line'>" . getBattlePhrase('defense', 'dodge', $context) . "</div>";
+            } else {
+                $defRoll = rand(1, 100);
+                $defType = $defRoll <= 12 ? 'panic' : ($defRoll <= 32 ? 'dance' : 'fail');
+                $turnContent .= "<div class='log-line'>" . getBattlePhrase('defense', $defType, $context) . "</div>";
+
+                $botDmg = calculateBattleDamage($enemy, $currentUser);
+                $glance = rand(1, 100) <= 12;
+                if ($glance) {
+                    $botDmg = max(1, (int)floor($botDmg * 0.6));
+                }
+                $critChance = getEffectiveCritChance($enemy, $currentUser);
+                $isCrit = (!$glance && rand(1, 100) <= $critChance);
+                if ($isCrit) {
+                    $botDmg = (int)floor($botDmg * 1.5);
+                    $context['damage'] = "<span class='log-dmg'>-$botDmg</span>";
+                    $turnContent .= "<div class='log-line'>" . getBattlePhrase('attack', 'crit', $context) . "</div>";
+                } else {
+                    $context['damage'] = "<span class='log-dmg'>-$botDmg</span>";
+                    $turnContent .= "<div class='log-line'>" . getBattlePhrase('attack', $glance ? 'glance' : 'hit', $context) . "</div>";
+                }
+                $currentUser['hp'] = max(0, $currentUser['hp'] - $botDmg);
+                $conn->query("UPDATE users SET hp = {$currentUser['hp']} WHERE id = {$currentUser['id']}");
+            }
+        }
     }
 
     $fullLogEntry = "<div class='log-entry-wrapper'><div class='log-turn-title'>Раунд {$battle['turn']}</div>$logHeader $turnContent";
 
     // Финал боя
-    if ($enemy['hp'] <= 0) {
+    if ($enemy['hp'] <= 0 && $currentUser['hp'] <= 0) {
+        $enemy['hp'] = 0;
+        $currentUser['hp'] = 0;
+        $battle['active'] = false;
+        $fullLogEntry .= "<div style='color:#f1c40f; font-weight:bold; margin-top:5px; font-size:16px;'>⚖️ НИЧЬЯ!</div></div>";
+        $conn->query("UPDATE users SET draws = draws + 1 WHERE id = {$currentUser['id']}");
+    } elseif ($enemy['hp'] <= 0) {
         $enemy['hp'] = 0;
         $battle['active'] = false;
+        $moneyGain = 5 + (int)floor(5 * ($currentUser['gold_bonus'] / 100));
         $fullLogEntry .= "<div style='color:green; font-weight:bold; margin-top:5px; font-size:16px;'>🏆 ПОБЕДА!</div></div>";
-        $conn->query("UPDATE users SET exp = exp + 10, money = money + 5 WHERE id = {$currentUser['id']}");
+        $conn->query("UPDATE users SET exp = exp + 10, money = money + $moneyGain, wins = wins + 1 WHERE id = {$currentUser['id']}");
     } elseif ($currentUser['hp'] <= 0) {
         $currentUser['hp'] = 0;
         $battle['active'] = false;
         $fullLogEntry .= "<div style='color:red; font-weight:bold; margin-top:5px; font-size:16px;'>☠️ ВЫ ПРОИГРАЛИ!</div></div>";
+        $conn->query("UPDATE users SET losses = losses + 1 WHERE id = {$currentUser['id']}");
     } else {
         $fullLogEntry .= "</div>";
     }
@@ -169,13 +325,24 @@ $currentLogEntry = isset($battle['log'][$logIndex]) ? $battle['log'][$logIndex] 
             const form = document.getElementById('battle-form');
             if(form) form.addEventListener('submit', (e) => { e.preventDefault(); commitTurn(); });
         }
+        const defBoxes = document.querySelectorAll('input[name="def_zones[]"]');
+        defBoxes.forEach((box) => {
+            box.addEventListener('change', (event) => {
+                const checked = Array.from(defBoxes).filter((item) => item.checked);
+                if (checked.length > 2) {
+                    event.target.checked = false;
+                }
+            });
+        });
     };
 </script>
 
 <div class="battle-arena-wrapper">
-    <div class="inv-header">
-        <div>⚔️ <b>Поединок</b> (Раунд <?= $battle['turn'] ?>)</div>
-        <div><a href="?page=home" style="color:#f1c40f">Выйти</a></div>
+    <div class="page-header">
+        <div class="page-title">⚔️ Поединок • Раунд <?= $battle['turn'] ?></div>
+        <div class="page-actions">
+            <a href="?page=home" class="ui-btn ui-btn--ghost">Выйти</a>
+        </div>
     </div>
 
     <!-- БОЙЦЫ -->
@@ -189,8 +356,8 @@ $currentLogEntry = isset($battle['log'][$logIndex]) ? $battle['log'][$logIndex] 
                 <div class="battle-hp-text"><?= $currentUser['hp'] ?> / <?= $currentUser['total_max_hp'] ?></div>
             </div>
             <div class="fighter-stats-mini">
-                <div>Сила: <?= $currentUser['total_str'] ?></div>
-                <div>Защита: <?= $currentUser['total_def'] ?></div>
+                <div>Урон: <?= $currentUser['damage_min'] ?>-<?= $currentUser['damage_max'] ?></div>
+                <div>Броня: <?= $currentUser['armor'] ?></div>
             </div>
         </div>
 
@@ -203,8 +370,8 @@ $currentLogEntry = isset($battle['log'][$logIndex]) ? $battle['log'][$logIndex] 
                 <div class="battle-hp-text"><?= $enemy['hp'] ?> / <?= $enemy['max_hp'] ?></div>
             </div>
             <div class="fighter-stats-mini">
-                <div>Сила: <?= $enemy['str'] ?></div>
-                <div>Защита: <?= $enemy['def'] ?></div>
+                <div>Урон: <?= $enemy['damage_min'] ?>-<?= $enemy['damage_max'] ?></div>
+                <div>Броня: <?= $enemy['def'] ?></div>
             </div>
         </div>
     </div>
@@ -225,17 +392,22 @@ $currentLogEntry = isset($battle['log'][$logIndex]) ? $battle['log'][$logIndex] 
                             <h4>🎯 Атака</h4>
                             <label class="zone-option"><input type="radio" name="attack_zone" value="1" checked> Голова</label>
                             <label class="zone-option"><input type="radio" name="attack_zone" value="2"> Корпус</label>
-                            <label class="zone-option"><input type="radio" name="attack_zone" value="3"> Ноги</label>
+                            <label class="zone-option"><input type="radio" name="attack_zone" value="3"> Живот</label>
+                            <label class="zone-option"><input type="radio" name="attack_zone" value="4"> Пах</label>
+                            <label class="zone-option"><input type="radio" name="attack_zone" value="5"> Ноги</label>
                         </div>
                         <div class="zone-column">
                             <h4>🛡️ Блок</h4>
-                            <label class="zone-option"><input type="radio" name="def_zone" value="1" checked> Голова</label>
-                            <label class="zone-option"><input type="radio" name="def_zone" value="2"> Корпус</label>
-                            <label class="zone-option"><input type="radio" name="def_zone" value="3"> Ноги</label>
+                            <div class="zone-note">Выберите 2 зоны</div>
+                            <label class="zone-option"><input type="checkbox" name="def_zones[]" value="1" checked> Голова</label>
+                            <label class="zone-option"><input type="checkbox" name="def_zones[]" value="2" checked> Корпус</label>
+                            <label class="zone-option"><input type="checkbox" name="def_zones[]" value="3"> Живот</label>
+                            <label class="zone-option"><input type="checkbox" name="def_zones[]" value="4"> Пах</label>
+                            <label class="zone-option"><input type="checkbox" name="def_zones[]" value="5"> Ноги</label>
                         </div>
                     </div>
                     <div style="text-align:center;">
-                        <button type="submit" class="battle-btn">⚔️ СДЕЛАТЬ ХОД</button>
+                        <button type="submit" class="ui-btn ui-btn--secondary">⚔️ СДЕЛАТЬ ХОД</button>
                     </div>
                 </div>
 
@@ -247,7 +419,7 @@ $currentLogEntry = isset($battle['log'][$logIndex]) ? $battle['log'][$logIndex] 
             <div style="text-align:center;">
                 <h3>Бой завершен</h3>
                 <form method="post">
-                    <button type="submit" name="reset_battle" class="battle-btn" style="background:#3498db; color:white;">В лобби</button>
+                    <button type="submit" name="reset_battle" class="ui-btn ui-btn--secondary">В лобби</button>
                 </form>
             </div>
         <?php endif; ?>
