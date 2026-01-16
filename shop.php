@@ -221,7 +221,13 @@ $items = fetchShopItems();
 ?>
 
 <div class="shop-wrapper">
-    <div class="shop-header">Магазин</div>
+    <div class="page-header">
+        <div class="page-title">Магазин</div>
+        <div class="page-actions">
+            <button type="button" class="ui-btn ui-btn--secondary" data-open-modal="modal-add-category">Добавить категорию</button>
+            <button type="button" class="ui-btn" data-open-modal="modal-add-item">Добавить вещь</button>
+        </div>
+    </div>
 
     <?php if ($shopMessage): ?>
         <div class="shop-message <?= $shopMessageType ?>"><?= htmlspecialchars($shopMessage) ?></div>
@@ -230,22 +236,6 @@ $items = fetchShopItems();
     <div class="shop-panels">
         <div class="shop-panel">
             <h3>Категории слотов</h3>
-            <form method="post" class="shop-form">
-                <input type="hidden" name="add_category" value="1">
-                <input type="text" name="category_name" placeholder="Название категории" required>
-                <select name="slot_number" required>
-                    <option value="">Слот</option>
-                    <?php foreach ($slotDefinitions as $slotNumber => $slotData): ?>
-                        <option value="<?= $slotNumber ?>">#<?= $slotNumber ?> - <?= $slotData['label'] ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="category_status">
-                    <option value="active">Активный</option>
-                    <option value="hidden">Скрытый</option>
-                </select>
-                <button type="submit" class="shop-btn">Добавить категорию</button>
-            </form>
-
             <?php if (empty($categories)): ?>
                 <div class="shop-empty">Категорий пока нет.</div>
             <?php endif; ?>
@@ -260,61 +250,27 @@ $items = fetchShopItems();
                         <?= $cat['status'] === 'hidden' ? 'Скрыт' : 'Активен' ?>
                     </div>
                     <div class="shop-row-actions">
-                        <form method="post" class="shop-inline-form">
-                            <input type="hidden" name="edit_category" value="1">
-                            <input type="hidden" name="category_id" value="<?= $cat['id'] ?>">
-                            <input type="text" name="category_name" value="<?= htmlspecialchars($cat['name']) ?>" required>
-                            <select name="slot_number" required>
-                                <?php foreach ($slotDefinitions as $slotNumber => $slotData): ?>
-                                    <option value="<?= $slotNumber ?>" <?= (int)$cat['slot_number'] === $slotNumber ? 'selected' : '' ?>>#<?= $slotNumber ?> - <?= $slotData['label'] ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <select name="category_status">
-                                <option value="active" <?= $cat['status'] === 'active' ? 'selected' : '' ?>>Активный</option>
-                                <option value="hidden" <?= $cat['status'] === 'hidden' ? 'selected' : '' ?>>Скрытый</option>
-                            </select>
-                            <button type="submit" class="shop-btn small">Сохранить</button>
-                        </form>
-                        <a class="shop-btn danger small" href="?page=shop&delete_category=<?= $cat['id'] ?>">Удалить</a>
+                        <button type="button"
+                                class="ui-btn ui-btn--ghost"
+                                data-edit-category
+                                data-category-id="<?= $cat['id'] ?>"
+                                data-category-name="<?= htmlspecialchars($cat['name'], ENT_QUOTES) ?>"
+                                data-slot-number="<?= (int)$cat['slot_number'] ?>"
+                                data-status="<?= $cat['status'] ?>">
+                            Редактировать
+                        </button>
+                        <a class="ui-btn ui-btn--danger"
+                           href="?page=shop&delete_category=<?= $cat['id'] ?>"
+                           onclick="return confirm('Удалить категорию и все предметы внутри?');">
+                           Удалить
+                        </a>
                     </div>
                 </div>
             <?php endforeach; ?>
         </div>
 
         <div class="shop-panel">
-            <h3>Добавить вещь</h3>
-            <form method="post" class="shop-form" enctype="multipart/form-data">
-                <input type="hidden" name="add_item" value="1">
-                <input type="text" name="item_name" placeholder="Название предмета" required>
-                <select name="item_category" required>
-                    <option value="">Категория</option>
-                    <?php foreach ($categories as $cat): ?>
-                        <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?> (слот #<?= $cat['slot_number'] ?>)</option>
-                    <?php endforeach; ?>
-                </select>
-                <div class="shop-grid">
-                    <input type="number" name="required_exp" placeholder="Требуемый опыт" min="0" value="0">
-                    <input type="number" name="item_price" placeholder="Стоимость" min="0" value="0">
-                </div>
-                <div class="shop-grid">
-                    <input type="number" name="stat_health" placeholder="Здоровье" value="0">
-                    <input type="number" name="stat_strength" placeholder="Сила" value="0">
-                    <input type="number" name="stat_agility" placeholder="Ловкость" value="0">
-                    <input type="number" name="stat_stamina" placeholder="Выносливость" value="0">
-                    <input type="number" name="stat_perception" placeholder="Внимательность" value="0">
-                    <input type="number" name="stat_cunning" placeholder="Хитрость" value="0">
-                    <input type="number" name="stat_charisma" placeholder="Харизма" value="0">
-                </div>
-                <div class="shop-grid">
-                    <input type="number" name="stat_str" placeholder="Бонус к урону" value="0">
-                    <input type="number" name="stat_def" placeholder="Бонус к броне" value="0">
-                    <input type="number" name="stat_hp" placeholder="Бонус к HP" value="0">
-                </div>
-                <input type="file" name="item_image" accept="image/*">
-                <button type="submit" class="shop-btn">Добавить вещь</button>
-            </form>
-
-            <h3>Список вещей</h3>
+            <h3>Витрина вещей</h3>
             <?php if (empty($items)): ?>
                 <div class="shop-empty">Вещей пока нет.</div>
             <?php endif; ?>
@@ -359,41 +315,34 @@ $items = fetchShopItems();
                         <?php endif; ?>
                     </div>
                     <div class="shop-item-actions">
-                        <form method="post" class="shop-inline-form" enctype="multipart/form-data">
-                            <input type="hidden" name="edit_item" value="1">
-                            <input type="hidden" name="item_id" value="<?= $item['id'] ?>">
-                            <input type="text" name="item_name" value="<?= htmlspecialchars($item['name']) ?>" required>
-                            <select name="item_category" required>
-                                <?php foreach ($categories as $cat): ?>
-                                    <option value="<?= $cat['id'] ?>" <?= (int)$item['category_id'] === (int)$cat['id'] ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($cat['name']) ?> (слот #<?= $cat['slot_number'] ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <div class="shop-grid">
-                                <input type="number" name="required_exp" value="<?= (int)$item['required_exp'] ?>" min="0">
-                                <input type="number" name="item_price" value="<?= (int)$item['price'] ?>" min="0">
-                            </div>
-                            <div class="shop-grid">
-                                <input type="number" name="stat_health" value="<?= (int)$item['stat_health'] ?>">
-                                <input type="number" name="stat_strength" value="<?= (int)$item['stat_strength'] ?>">
-                                <input type="number" name="stat_agility" value="<?= (int)$item['stat_agility'] ?>">
-                                <input type="number" name="stat_stamina" value="<?= (int)$item['stat_stamina'] ?>">
-                                <input type="number" name="stat_perception" value="<?= (int)$item['stat_perception'] ?>">
-                                <input type="number" name="stat_cunning" value="<?= (int)$item['stat_cunning'] ?>">
-                                <input type="number" name="stat_charisma" value="<?= (int)$item['stat_charisma'] ?>">
-                            </div>
-                            <div class="shop-grid">
-                                <input type="number" name="stat_str" value="<?= (int)$item['stat_str'] ?>">
-                                <input type="number" name="stat_def" value="<?= (int)$item['stat_def'] ?>">
-                                <input type="number" name="stat_hp" value="<?= (int)$item['stat_hp'] ?>">
-                            </div>
-                            <input type="file" name="item_image" accept="image/*">
-                            <button type="submit" class="shop-btn small">Сохранить</button>
-                        </form>
-                        <a class="shop-btn danger small" href="?page=shop&delete_item=<?= $item['id'] ?>">Удалить</a>
-                        <form method="post" class="shop-inline-form">
-                            <button type="submit" name="buy_item" value="<?= $item['id'] ?>" class="shop-btn small" <?= $canBuy ? '' : 'disabled' ?>>Купить</button>
+                        <button type="button"
+                                class="ui-btn ui-btn--ghost"
+                                data-edit-item
+                                data-item-id="<?= $item['id'] ?>"
+                                data-item-name="<?= htmlspecialchars($item['name'], ENT_QUOTES) ?>"
+                                data-item-category="<?= (int)$item['category_id'] ?>"
+                                data-item-exp="<?= (int)$item['required_exp'] ?>"
+                                data-item-price="<?= (int)$item['price'] ?>"
+                                data-stat-health="<?= (int)$item['stat_health'] ?>"
+                                data-stat-strength="<?= (int)$item['stat_strength'] ?>"
+                                data-stat-agility="<?= (int)$item['stat_agility'] ?>"
+                                data-stat-stamina="<?= (int)$item['stat_stamina'] ?>"
+                                data-stat-perception="<?= (int)$item['stat_perception'] ?>"
+                                data-stat-cunning="<?= (int)$item['stat_cunning'] ?>"
+                                data-stat-charisma="<?= (int)$item['stat_charisma'] ?>"
+                                data-stat-str="<?= (int)$item['stat_str'] ?>"
+                                data-stat-def="<?= (int)$item['stat_def'] ?>"
+                                data-stat-hp="<?= (int)$item['stat_hp'] ?>"
+                                data-item-image="<?= htmlspecialchars($item['image'] ?? '', ENT_QUOTES) ?>">
+                            Редактировать
+                        </button>
+                        <a class="ui-btn ui-btn--danger"
+                           href="?page=shop&delete_item=<?= $item['id'] ?>"
+                           onclick="return confirm('Удалить предмет?');">
+                           Удалить
+                        </a>
+                        <form method="post">
+                            <button type="submit" name="buy_item" value="<?= $item['id'] ?>" class="ui-btn ui-btn--secondary" <?= $canBuy ? '' : 'disabled' ?>>Купить</button>
                         </form>
                     </div>
                 </div>
@@ -401,3 +350,195 @@ $items = fetchShopItems();
         </div>
     </div>
 </div>
+
+<div class="modal" id="modal-add-category" aria-hidden="true">
+    <div class="modal-overlay" data-close-modal></div>
+    <div class="modal-card light">
+        <button class="modal-close" type="button" data-close-modal>×</button>
+        <div class="modal-title">Новая категория</div>
+        <form method="post" class="form-grid">
+            <input type="hidden" name="add_category" value="1">
+            <input class="ui-input" type="text" name="category_name" placeholder="Название категории" required>
+            <select class="ui-select" name="slot_number" required>
+                <option value="">Слот</option>
+                <?php foreach ($slotDefinitions as $slotNumber => $slotData): ?>
+                    <option value="<?= $slotNumber ?>">#<?= $slotNumber ?> - <?= $slotData['label'] ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select class="ui-select" name="category_status">
+                <option value="active">Активный</option>
+                <option value="hidden">Скрытый</option>
+            </select>
+            <button type="submit" class="ui-btn ui-btn--secondary">Сохранить</button>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="modal-edit-category" aria-hidden="true">
+    <div class="modal-overlay" data-close-modal></div>
+    <div class="modal-card light">
+        <button class="modal-close" type="button" data-close-modal>×</button>
+        <div class="modal-title">Редактировать категорию</div>
+        <form method="post" class="form-grid" id="edit-category-form">
+            <input type="hidden" name="edit_category" value="1">
+            <input type="hidden" name="category_id" id="edit-category-id">
+            <input class="ui-input" type="text" name="category_name" id="edit-category-name" required>
+            <select class="ui-select" name="slot_number" id="edit-category-slot" required>
+                <?php foreach ($slotDefinitions as $slotNumber => $slotData): ?>
+                    <option value="<?= $slotNumber ?>">#<?= $slotNumber ?> - <?= $slotData['label'] ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select class="ui-select" name="category_status" id="edit-category-status">
+                <option value="active">Активный</option>
+                <option value="hidden">Скрытый</option>
+            </select>
+            <button type="submit" class="ui-btn ui-btn--secondary">Сохранить</button>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="modal-add-item" aria-hidden="true">
+    <div class="modal-overlay" data-close-modal></div>
+    <div class="modal-card light">
+        <button class="modal-close" type="button" data-close-modal>×</button>
+        <div class="modal-title">Новая вещь</div>
+        <form method="post" class="form-grid" enctype="multipart/form-data">
+            <input type="hidden" name="add_item" value="1">
+            <input class="ui-input" type="text" name="item_name" placeholder="Название предмета" required>
+            <select class="ui-select" name="item_category" required>
+                <option value="">Категория</option>
+                <?php foreach ($categories as $cat): ?>
+                    <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?> (слот #<?= $cat['slot_number'] ?>)</option>
+                <?php endforeach; ?>
+            </select>
+            <div class="form-grid two">
+                <input class="ui-input" type="number" name="required_exp" placeholder="Требуемый опыт" min="0" value="0">
+                <input class="ui-input" type="number" name="item_price" placeholder="Стоимость" min="0" value="0">
+            </div>
+            <div class="form-grid three">
+                <input class="ui-input" type="number" name="stat_health" placeholder="Здоровье" value="0">
+                <input class="ui-input" type="number" name="stat_strength" placeholder="Сила" value="0">
+                <input class="ui-input" type="number" name="stat_agility" placeholder="Ловкость" value="0">
+                <input class="ui-input" type="number" name="stat_stamina" placeholder="Выносливость" value="0">
+                <input class="ui-input" type="number" name="stat_perception" placeholder="Внимательность" value="0">
+                <input class="ui-input" type="number" name="stat_cunning" placeholder="Хитрость" value="0">
+                <input class="ui-input" type="number" name="stat_charisma" placeholder="Харизма" value="0">
+            </div>
+            <div class="form-grid three">
+                <input class="ui-input" type="number" name="stat_str" placeholder="Бонус к урону" value="0">
+                <input class="ui-input" type="number" name="stat_def" placeholder="Бонус к броне" value="0">
+                <input class="ui-input" type="number" name="stat_hp" placeholder="Бонус к HP" value="0">
+            </div>
+            <input class="ui-input" type="file" name="item_image" accept="image/*">
+            <button type="submit" class="ui-btn ui-btn--secondary">Сохранить</button>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="modal-edit-item" aria-hidden="true">
+    <div class="modal-overlay" data-close-modal></div>
+    <div class="modal-card light">
+        <button class="modal-close" type="button" data-close-modal>×</button>
+        <div class="modal-title">Редактировать вещь</div>
+        <div class="shop-modal-preview">
+            <img id="edit-item-preview" src="" alt="item">
+        </div>
+        <form method="post" class="form-grid" enctype="multipart/form-data" id="edit-item-form">
+            <input type="hidden" name="edit_item" value="1">
+            <input type="hidden" name="item_id" id="edit-item-id">
+            <input class="ui-input" type="text" name="item_name" id="edit-item-name" required>
+            <select class="ui-select" name="item_category" id="edit-item-category" required>
+                <?php foreach ($categories as $cat): ?>
+                    <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?> (слот #<?= $cat['slot_number'] ?>)</option>
+                <?php endforeach; ?>
+            </select>
+            <div class="form-grid two">
+                <input class="ui-input" type="number" name="required_exp" id="edit-item-exp" min="0">
+                <input class="ui-input" type="number" name="item_price" id="edit-item-price" min="0">
+            </div>
+            <div class="form-grid three">
+                <input class="ui-input" type="number" name="stat_health" id="edit-item-health">
+                <input class="ui-input" type="number" name="stat_strength" id="edit-item-strength">
+                <input class="ui-input" type="number" name="stat_agility" id="edit-item-agility">
+                <input class="ui-input" type="number" name="stat_stamina" id="edit-item-stamina">
+                <input class="ui-input" type="number" name="stat_perception" id="edit-item-perception">
+                <input class="ui-input" type="number" name="stat_cunning" id="edit-item-cunning">
+                <input class="ui-input" type="number" name="stat_charisma" id="edit-item-charisma">
+            </div>
+            <div class="form-grid three">
+                <input class="ui-input" type="number" name="stat_str" id="edit-item-stat-str">
+                <input class="ui-input" type="number" name="stat_def" id="edit-item-stat-def">
+                <input class="ui-input" type="number" name="stat_hp" id="edit-item-stat-hp">
+            </div>
+            <input class="ui-input" type="file" name="item_image" accept="image/*">
+            <button type="submit" class="ui-btn ui-btn--secondary">Сохранить</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const openModal = (id) => {
+        const modal = document.getElementById(id);
+        if (!modal) return;
+        modal.classList.add('is-open');
+        document.body.classList.add('modal-open');
+    };
+
+    const closeModal = (modal) => {
+        modal.classList.remove('is-open');
+        document.body.classList.remove('modal-open');
+    };
+
+    document.querySelectorAll('[data-open-modal]').forEach((btn) => {
+        btn.addEventListener('click', () => openModal(btn.dataset.openModal));
+    });
+
+    document.querySelectorAll('[data-close-modal]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const modal = btn.closest('.modal');
+            if (modal) closeModal(modal);
+        });
+    });
+
+    document.querySelectorAll('[data-edit-category]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            document.getElementById('edit-category-id').value = btn.dataset.categoryId;
+            document.getElementById('edit-category-name').value = btn.dataset.categoryName;
+            document.getElementById('edit-category-slot').value = btn.dataset.slotNumber;
+            document.getElementById('edit-category-status').value = btn.dataset.status;
+            openModal('modal-edit-category');
+        });
+    });
+
+    document.querySelectorAll('[data-edit-item]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            document.getElementById('edit-item-id').value = btn.dataset.itemId;
+            document.getElementById('edit-item-name').value = btn.dataset.itemName;
+            document.getElementById('edit-item-category').value = btn.dataset.itemCategory;
+            document.getElementById('edit-item-exp').value = btn.dataset.itemExp;
+            document.getElementById('edit-item-price').value = btn.dataset.itemPrice;
+            document.getElementById('edit-item-health').value = btn.dataset.statHealth;
+            document.getElementById('edit-item-strength').value = btn.dataset.statStrength;
+            document.getElementById('edit-item-agility').value = btn.dataset.statAgility;
+            document.getElementById('edit-item-stamina').value = btn.dataset.statStamina;
+            document.getElementById('edit-item-perception').value = btn.dataset.statPerception;
+            document.getElementById('edit-item-cunning').value = btn.dataset.statCunning;
+            document.getElementById('edit-item-charisma').value = btn.dataset.statCharisma;
+            document.getElementById('edit-item-stat-str').value = btn.dataset.statStr;
+            document.getElementById('edit-item-stat-def').value = btn.dataset.statDef;
+            document.getElementById('edit-item-stat-hp').value = btn.dataset.statHp;
+
+            const preview = document.getElementById('edit-item-preview');
+            const img = btn.dataset.itemImage;
+            preview.src = img ? img : '';
+            preview.style.display = img ? 'block' : 'none';
+            openModal('modal-edit-item');
+        });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            document.querySelectorAll('.modal.is-open').forEach((modal) => closeModal(modal));
+        }
+    });
+</script>

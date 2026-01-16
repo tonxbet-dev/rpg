@@ -338,9 +338,11 @@ $currentLogEntry = isset($battle['log'][$logIndex]) ? $battle['log'][$logIndex] 
 </script>
 
 <div class="battle-arena-wrapper">
-    <div class="inv-header">
-        <div>⚔️ <b>Поединок</b> (Раунд <?= $battle['turn'] ?>)</div>
-        <div><a href="?page=home" style="color:#f1c40f">Выйти</a></div>
+    <div class="page-header">
+        <div class="page-title">⚔️ Поединок • Раунд <?= $battle['turn'] ?></div>
+        <div class="page-actions">
+            <a href="?page=home" class="ui-btn ui-btn--ghost">Выйти</a>
+        </div>
     </div>
 
     <!-- БОЙЦЫ -->
@@ -405,7 +407,7 @@ $currentLogEntry = isset($battle['log'][$logIndex]) ? $battle['log'][$logIndex] 
                         </div>
                     </div>
                     <div style="text-align:center;">
-                        <button type="submit" class="battle-btn">⚔️ СДЕЛАТЬ ХОД</button>
+                        <button type="submit" class="ui-btn ui-btn--secondary">⚔️ СДЕЛАТЬ ХОД</button>
                     </div>
                 </div>
 
@@ -417,7 +419,7 @@ $currentLogEntry = isset($battle['log'][$logIndex]) ? $battle['log'][$logIndex] 
             <div style="text-align:center;">
                 <h3>Бой завершен</h3>
                 <form method="post">
-                    <button type="submit" name="reset_battle" class="battle-btn" style="background:#3498db; color:white;">В лобби</button>
+                    <button type="submit" name="reset_battle" class="ui-btn ui-btn--secondary">В лобби</button>
                 </form>
             </div>
         <?php endif; ?>

@@ -151,7 +151,7 @@ if (!isset($_SESSION['tournament'])) {
     echo '<div style="text-align:center; padding:50px;">
             <h2>Турнир 10x10</h2>
             <p>Битва стенка на стенку.</p>
-            <form method="post"><button type="submit" name="start_tournament" class="battle-btn">Вступить в бой</button></form>
+            <form method="post"><button type="submit" name="start_tournament" class="ui-btn ui-btn--secondary">Вступить в бой</button></form>
           </div>';
     return; // Прерываем выполнение, чтобы не показывать интерфейс боя
 }
@@ -194,7 +194,7 @@ if (isset($_POST['process_tournament']) && $t['active']) {
         $target = null;
         if ($fighter['is_player']) {
             if ($isTimeout) {
-                $roundLog .= "<div style='color:#7f8c8d'>⌛ {$fighter['name']} пропустил ход.</div>";
+                $roundLog .= "<div class='log-line' style='color:#7f8c8d'>⌛ {$fighter['name']} пропустил ход.</div>";
                 continue; 
             }
             if ($t['teamB'][$t['player_target']]['alive']) {
@@ -395,9 +395,11 @@ $currentLogEntry = isset($t['log'][$currentPage-1]) ? $t['log'][$currentPage-1] 
 </script>
 
 <div class="battle-arena-wrapper">
-    <div class="inv-header">
-        <div>🏆 <b>Турнир 10x10</b> (Раунд <?= $t['turn'] ?>)</div>
-        <div><a href="?page=home" style="color:#f1c40f">Выйти</a></div>
+    <div class="page-header">
+        <div class="page-title">🏆 Турнир 10x10 • Раунд <?= $t['turn'] ?></div>
+        <div class="page-actions">
+            <a href="?page=home" class="ui-btn ui-btn--ghost">Выйти</a>
+        </div>
     </div>
 
     <!-- СПИСКИ КОМАНД -->
@@ -455,11 +457,11 @@ $currentLogEntry = isset($t['log'][$currentPage-1]) ? $t['log'][$currentPage-1] 
                         <label class="zone-option"><input type="checkbox" name="def_zones[]" value="5"> Ноги</label>
                     </div>
                 </div>
-                <button type="submit" class="battle-btn">АТАКА</button>
+                <button type="submit" class="ui-btn ui-btn--secondary">АТАКА</button>
             </div>
         <?php else: ?>
             <div style="text-align:center; padding:20px;">
-                <button type="submit" name="reset_tournament" class="battle-btn">Выход</button>
+                <button type="submit" name="reset_tournament" class="ui-btn ui-btn--secondary">Выход</button>
             </div>
         <?php endif; ?>
     </form>

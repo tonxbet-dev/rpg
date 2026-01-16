@@ -90,7 +90,35 @@ $page = $_GET['page'] ?? 'home';
                     <form method="post"><input type="text" name="username"><br><input type="password" name="password"><br><button type="submit" name="login">Войти</button></form>
                 </div>
             <?php elseif ($page == 'home'): ?>
-                <h2>Центральная Площадь</h2>
+                <div class="home-dashboard">
+                    <div class="ui-card home-hero">
+                        <div class="home-title">Центральная площадь</div>
+                        <div class="home-subtitle">Соберите снаряжение, прокачайте героя и отправляйтесь в бой.</div>
+                        <div class="home-actions">
+                            <a class="ui-btn ui-btn--secondary" href="?page=player">Герой</a>
+                            <a class="ui-btn" href="?page=battle">Поединок</a>
+                            <a class="ui-btn ui-btn--ghost" href="?page=tournament">Турнир</a>
+                            <a class="ui-btn ui-btn--ghost" href="?page=shop">Магазин</a>
+                        </div>
+                    </div>
+                    <div class="home-grid">
+                        <div class="ui-card home-card">
+                            <div class="home-card-title">Быстрый бой</div>
+                            <div class="home-card-text">Проверьте билд на практике и заберите награды.</div>
+                            <a class="ui-btn ui-btn--secondary" href="?page=battle">В бой</a>
+                        </div>
+                        <div class="ui-card home-card">
+                            <div class="home-card-title">Командный турнир</div>
+                            <div class="home-card-text">Соберите команду и попробуйте силы в массовой битве.</div>
+                            <a class="ui-btn" href="?page=tournament">На турнир</a>
+                        </div>
+                        <div class="ui-card home-card">
+                            <div class="home-card-title">Магазин</div>
+                            <div class="home-card-text">Создавайте категории и снаряжайте героя новыми вещами.</div>
+                            <a class="ui-btn ui-btn--ghost" href="?page=shop">Открыть</a>
+                        </div>
+                    </div>
+                </div>
             <?php elseif ($page == 'player'): ?>
                 <?php include 'player.php'; ?>
             <?php elseif ($page == 'battle'): ?>

@@ -240,8 +240,8 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber, $isLocke
         </div>
 
         <div class="inv-actions">
-             <button class="inv-action-btn">Снять всё</button>
-             <button class="inv-action-btn">Сохранить</button>
+             <button class="inv-action-btn ui-btn ui-btn--ghost">Снять всё</button>
+             <button class="inv-action-btn ui-btn ui-btn--secondary">Сохранить</button>
         </div>
     </div>
 
@@ -276,12 +276,12 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber, $isLocke
     </div>
 </div>
 
-<div class="stat-upgrade-modal" id="stat-upgrade-modal" aria-hidden="true">
-    <div class="stat-upgrade-overlay" data-modal-close></div>
-    <div class="stat-upgrade-card" role="dialog" aria-modal="true">
-        <button class="stat-upgrade-close" type="button" data-modal-close>×</button>
-        <div class="stat-upgrade-title" id="stat-modal-title"></div>
-        <div class="stat-upgrade-desc" id="stat-modal-desc"></div>
+<div class="modal" id="stat-modal" aria-hidden="true">
+    <div class="modal-overlay" data-modal-close></div>
+    <div class="modal-card" role="dialog" aria-modal="true">
+        <button class="modal-close" type="button" data-modal-close>×</button>
+        <div class="modal-title" id="stat-modal-title"></div>
+        <div class="modal-subtitle" id="stat-modal-desc"></div>
         <div class="stat-upgrade-current">Текущее значение: <span id="stat-modal-current"></span></div>
         <div class="stat-upgrade-controls">
             <button type="button" class="stat-qty-btn" data-qty="-1">-</button>
@@ -293,7 +293,7 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber, $isLocke
             <input type="hidden" name="upgrade_stat" value="1">
             <input type="hidden" name="stat_key" id="stat-modal-key">
             <input type="hidden" name="stat_amount" id="stat-modal-amount">
-            <button type="submit" class="stat-upgrade-confirm">Увеличить</button>
+            <button type="submit" class="ui-btn ui-btn--secondary">Увеличить</button>
         </form>
     </div>
 </div>
@@ -301,7 +301,7 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber, $isLocke
 <script>
     const STAT_COST_BASE = <?= STAT_COST_BASE ?>;
     const STAT_COST_GROWTH = <?= STAT_COST_GROWTH ?>;
-    const modal = document.getElementById('stat-upgrade-modal');
+    const modal = document.getElementById('stat-modal');
     const modalTitle = document.getElementById('stat-modal-title');
     const modalDesc = document.getElementById('stat-modal-desc');
     const modalCurrent = document.getElementById('stat-modal-current');
@@ -335,12 +335,12 @@ function renderSlot($userId, $slotName, $iconName, $title, $slotNumber, $isLocke
         modalCurrent.textContent = modalBaseValue;
         modalKey.value = button.dataset.statKey;
         updateModalCost(1);
-        modal.classList.add('open');
+        modal.classList.add('is-open');
         document.body.classList.add('modal-open');
     }
 
     function closeModal() {
-        modal.classList.remove('open');
+        modal.classList.remove('is-open');
         document.body.classList.remove('modal-open');
     }
 
